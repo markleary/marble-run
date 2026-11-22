@@ -135,15 +135,22 @@ export class RaceSimulation {
     this.racing = true;
   }
 
-  rollingSurface(marble: MarbleState): CourseSurface | undefined {
+  rollingSurface(marble: MarbleState, contact: 'any' | 'support' = 'any'): CourseSurface | undefined {
     const ball = this.bodies[marble.id].collider(0);
     const preferred = this.track.surfaceAt(marble.distance);
     let result: CourseSurface | undefined;
     this.world.contactPairsWith(ball, other => {
       const surface = this.surfaceByCollider.get(other.handle);
       if (!surface || result === preferred) return;
-      this.world.contactPair(ball, other, manifold => {
-        if (manifold.numSolverContacts()) result = surface;
+      this.world.contactPair(ball, other, (manifold, flipped) => {
+        if (!manifold.numSolverContacts()) return;
+        if (contact === 'support') {
+          // Point the normal from the track toward the marble, whichever
+          // collider Rapier placed first. A vertical guard supplies no lift.
+          const up = manifold.normal().y * (flipped ? 1 : -1);
+          if (up < 0.5) return;
+        }
+        result = surface;
       });
     });
     return result;

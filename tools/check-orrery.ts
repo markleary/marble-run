@@ -35,20 +35,19 @@ export function checkOrreryJumps(track: CourseTrack, seed: number) {
         orreryJumps.forEach((jump, index) => {
           const flight = flights[marble.id][index]
           if (flight.landed || marble.distance < jump.takeoff || marble.distance > jump.landing + 6) return
-          if (marble.distance >= jump.landing && race.rollingSurface(marble)) {
-            // A marble can brush a side shield midflight. Only contact near the
-            // receiving floor counts as touchdown.
-            const center = track.sample(marble.distance)
-            const lateral = (marble.position.x - center.x) * center.rx + (marble.position.z - center.z) * center.rz
-            if (marble.position.y <= track.sample(marble.distance, lateral).y + track.radius + .07) {
-              if (flight.descending) flight.landed = true
-              return
-            }
+          if (!race.rollingSurface(marble, 'support')) {
+            flight.airFrames++
+            const dy = marble.position.y - marble.previousPosition.y
+            if (marble.distance < jump.landing && dy > .002) flight.ascending = true
+            if (dy < -.002 && flight.ascending) flight.descending = true
+            return
           }
-          flight.airFrames++
-          const dy = marble.position.y - marble.previousPosition.y
-          if (dy > .002) flight.ascending = true
-          if (dy < -.002 && flight.ascending) flight.descending = true
+          // The catch deck sits below the upper edge of its shield. Only
+          // supporting contact close to that deck completes the landing.
+          if (!flight.descending || marble.distance < jump.landing) return
+          const center = track.sample(marble.distance)
+          const lateral = (marble.position.x - center.x) * center.rx + (marble.position.z - center.z) * center.rz
+          flight.landed = marble.position.y <= track.sample(marble.distance, lateral).y + track.radius + .07
         })
       }
     }
