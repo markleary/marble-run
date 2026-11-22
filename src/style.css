@@ -64,6 +64,8 @@ legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 .track-options button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .track-options button:hover:not([aria-pressed="true"]) { background: #eceee4; }
 .track-stripes { flex: none; height: 21px; width: 12px; transform: skew(-13deg); border-radius: 2px; background: linear-gradient(90deg,#ef6146 0 33%,#edb634 33% 66%,#36b4a4 66%); }
+[data-course=timber] .track-stripes { background: linear-gradient(90deg,#754128 0 33%,#dcaf69 33% 66%,#477459 66%); }
+[data-course=wireworks] .track-stripes { background: linear-gradient(90deg,#cf773c 0 33%,#94afa8 33% 66%,#385464 66%); }
 [data-course=frostline] .track-stripes { background: linear-gradient(90deg,#47a4c3 0 33%,#c7e6ed 33% 66%,#728eac 66%); }
 .result-course { color: var(--muted); margin-bottom: 6px; font: 600 15px/1.2 var(--sans); }
 .count-choices { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 5px; margin-top: 12px; }

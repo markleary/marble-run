@@ -139,7 +139,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     <div class="sr-only status-announcement" role="status"></div>
     <dialog class="standings-dialog">
       <div class="dialog-heading"><h2>Standings</h2><button class="icon-button close-dialog" aria-label="Close standings">${icon('close')}</button></div>
-      <p class="scoring-rule">Points across both tracks. First earns 3, second earns 2, and third earns 1.</p>
+      <p class="scoring-rule">Points across all tracks. First earns 3, second earns 2, and third earns 1.</p>
       <div class="standings-content"></div>
     </dialog>`;
 

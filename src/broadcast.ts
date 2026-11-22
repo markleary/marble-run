@@ -7,18 +7,38 @@ import type { CourseId } from './courses/catalog';
 import { createCourseScenery } from './scenery';
 
 type Offset = [number, number, number];
-interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean }
+interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean }
 const shots: Record<CourseId, Shot[]> = {
   prism: [
     { offset: [4.5, 4.2, -7.8] }, { offset: [4.5, 4.2, -7.8] },
     { offset: [7.7, 8.2, -4.4], anchor: 0.22 }, { offset: [-3.8, 5, 8.6] },
     { offset: [-8.5, 8, 4.8], anchor: 0.2 }, { offset: [4.8, 4.5, 8.3] },
   ],
+  timber: [
+    { offset: [4.2, 5.4, -8.8] },
+    { offset: [2, 11.5, -10.2], trackRelative: true },
+    { offset: [1.6, 6.8, -10.8], trackRelative: true },
+    { offset: [9.6, 6.3, 5.2], anchor: 0.12 },
+    { offset: [-5.8, 5.1, 8.4] }, { offset: [4.5, 5.1, 8.8] },
+  ],
+  wireworks: [
+    { offset: [4, 5.5, -8.5] }, { offset: [6, 4.5, -9] },
+    { offset: [7.5, 6.5, -4] },
+    { offset: [13, 21, 2], portraitOffset: [0.5, 22, -9], fixed: true },
+    { offset: [9, 7.5, 6], anchor: 0.12 }, { offset: [3, 5.5, 9.5] },
+  ],
   frostline: [
     { offset: [3.2, 5.8, -9.4] }, { offset: [2, 10, -10.5], anchor: 0.12 },
     { offset: [8, 5.3, -6.4] }, { offset: [13, 20, 2], portraitOffset: [0.4, 20, -8], fixed: true },
     { offset: [7.6, 7.3, 9.3], anchor: 0.12 }, { offset: [-3.4, 5.8, 9.6] },
   ],
+};
+
+const settings: Record<CourseId, { sky: string; fog: string; haze: number; preview: Offset }> = {
+  prism: { sky: '#dedfd6', fog: '#e5e5db', haze: 0.006, preview: [0.57, 0.83, -1.28] },
+  frostline: { sky: '#b8d8e8', fog: '#cedfe7', haze: 0.004, preview: [-0.55, 1.05, 1.35] },
+  timber: { sky: '#edd5b3', fog: '#e6d4bd', haze: 0.005, preview: [0.9, 0.95, 1.2] },
+  wireworks: { sky: '#b4cbd0', fog: '#c4d0cc', haze: 0.004, preview: [0.9, 1.02, 1.22] },
 };
 
 function disposeScenery(root: THREE.Group) {
@@ -152,9 +172,9 @@ export class RaceBroadcast {
       disposeScenery(this.scenery);
     }
     this.track = track;
-    const winter = track.id === 'frostline';
-    this.scene.background = new THREE.Color(winter ? '#b8d8e8' : '#dedfd6');
-    this.scene.fog = new THREE.FogExp2(winter ? '#cedfe7' : '#e5e5db', winter ? 0.004 : 0.006);
+    const theme = settings[track.id];
+    this.scene.background = new THREE.Color(theme.sky);
+    this.scene.fog = new THREE.FogExp2(theme.fog, theme.haze);
     this.scenery = createCourseScenery(track);
     this.scene.add(this.scenery);
     this.gate = new THREE.Group();
@@ -218,8 +238,7 @@ export class RaceBroadcast {
     this.gateRaised = false;
     this.marker.visible = false;
     this.focusGoal.copy(this.previewCenter);
-    const direction = (this.track.id === 'frostline'
-      ? new THREE.Vector3(-0.55, 1.05, 1.35) : new THREE.Vector3(0.57, 0.83, -1.28)).normalize();
+    const direction = new THREE.Vector3(...settings[this.track.id].preview).normalize();
     // Fit the actual curved raceway, allowing the studio floor to extend beyond the frame.
     this.camera.position.copy(this.focusGoal).add(direction);
     this.camera.lookAt(this.focusGoal);
@@ -328,6 +347,14 @@ export class RaceBroadcast {
       if (shot.fixed) this.focusGoal.copy(this.sectionAnchors[this.shot]);
       else if (shot.anchor) this.focusGoal.lerp(this.sectionAnchors[this.shot], shot.anchor);
       offset = this.camera.aspect < 0.8 && shot.portraitOffset ? shot.portraitOffset : shot.offset;
+      if (shot.trackRelative) {
+        // Orbit outside the helix so the central drum stays behind the racers.
+        this.focusGoal.set(0, 0, 0);
+        for (const marble of pack) this.focusGoal.add(marble.position);
+        this.focusGoal.divideScalar(pack.length);
+        const [forward, up, side] = offset;
+        offset = [forward * p.tx + side * p.rx, up, forward * p.tz + side * p.rz];
+      }
     }
     this.sightLine.set(...offset);
     const fixedFrame = this.fixedFrames[this.shot];

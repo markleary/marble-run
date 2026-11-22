@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { buildTrack } from '../src/track';
 import type { CourseTrack } from '../src/track';
 import { courseIds } from '../src/courses/catalog';
+import timberLayout from '../src/courses/timber-layout.json';
+import wireworksLayout from '../src/courses/wireworks-layout.json';
+import { checkWireworksContacts } from './check-wireworks';
 import { initPhysics, RaceSimulation } from '../src/simulation';
 
 const repetitions = Number(process.argv[2] ?? 100);
@@ -9,12 +12,15 @@ const firstSeed = Number(process.argv[3] ?? 1);
 const courseFilter = process.argv[4];
 assert.ok(Number.isSafeInteger(repetitions) && repetitions > 0, 'Pass a positive number of heats per field size.');
 assert.ok(Number.isSafeInteger(firstSeed), 'Pass an integer starting seed.');
-assert.ok(!courseFilter || courseIds.some(id => id === courseFilter), 'Specify prism or frostline.');
+assert.ok(!courseFilter || courseIds.some(id => id === courseFilter), 'Specify one of ' + courseIds.join(', ') + '.');
 
 function exerciseField(track: CourseTrack, count: number) {
   const wins = Array<number>(track.laneCount).fill(0);
   const starts = Array<number>(track.laneCount).fill(0);
   const durations: number[] = [];
+  const forkMidpoint = (wireworksLayout.forkStart + wireworksLayout.forkEnd) / 2;
+  const forkCenter = track.sample(forkMidpoint);
+  const branchStarts = [0, 0], branchWins = [0, 0];
   let replayFinishTimes: (number | null)[] | undefined;
 
   for (let i = 0; i < repetitions; i++) {
@@ -29,7 +35,20 @@ function exerciseField(track: CourseTrack, count: number) {
       race.step();
       assert.equal(race.elapsed, 0, 'staging must not advance the clock');
       race.release();
-      while (!race.finished && !race.failure) race.step();
+      const branches = new Map<number, number>();
+      while (!race.finished && !race.failure) {
+        race.step();
+        if (track.id === 'wireworks' && branches.size < count) {
+          for (const marble of race.marbles) {
+            if (marble.distance < forkMidpoint || branches.has(marble.id)) continue;
+            const { x, z } = marble.position;
+            const lateral = (x - forkCenter.x) * forkCenter.rx + (z - forkCenter.z) * forkCenter.rz;
+            const branch = lateral < 0 ? 0 : 1;
+            branches.set(marble.id, branch);
+            branchStarts[branch]++;
+          }
+        }
+      }
       if (race.failure) {
         console.error(JSON.stringify({
           course: track.id, count, seed, problem: race.failure, time: race.elapsed,
@@ -48,6 +67,10 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.deepEqual(race.marbles.map(m => m.finishTime), replayFinishTimes);
         }
         wins[finishers[0].slot]++;
+        if (track.id === 'wireworks') {
+          assert.equal(branches.size, count);
+          branchWins[branches.get(finishers[0].id)!]++;
+        }
         durations.push(finishers[count - 1].finishTime!);
       }
     } finally {
@@ -57,6 +80,7 @@ function exerciseField(track: CourseTrack, count: number) {
   console.log(JSON.stringify({
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
+    ...(track.id === 'wireworks' && { branchStarts, branchWins }),
   }));
   if (replayFinishTimes) {
     const replay = new RaceSimulation(track, count, firstSeed);
@@ -71,8 +95,8 @@ function exerciseField(track: CourseTrack, count: number) {
   return repetitions - durations.length;
 }
 
-function checkFrostlineTransitions(track: CourseTrack) {
-  // A pack slowed by a deflector or a material seam should still roll downhill.
+function checkSectionStarts(track: CourseTrack) {
+  // Every downstream section must let a pack accelerate again from rest.
   for (const section of track.sections.slice(1)) {
     const race = new RaceSimulation({ ...track, startS: section.start }, track.laneCount, firstSeed);
     try {
@@ -85,12 +109,29 @@ function checkFrostlineTransitions(track: CourseTrack) {
   }
 }
 
+function checkTimberLevels(track: CourseTrack) {
+  const upper = track.sections[1].start + timberLayout.drumRadius * Math.PI / 4;
+  const lower = upper + 2 * Math.PI * timberLayout.drumRadius;
+  for (const lateral of [-2, 0, 2]) {
+    const top = track.sample(upper, lateral), bottom = track.sample(lower, lateral);
+    assert.ok(Math.hypot(top.x - bottom.x, top.z - bottom.z) < 0.001 && top.y - bottom.y > 2 * track.radius);
+    for (const [s, p] of [[upper, top], [lower, bottom]] as const) {
+      for (const hint of [undefined, s - .2]) {
+        const at = track.locate(p.x, p.z, hint, p.y + track.radius);
+        assert.ok(Math.abs(at.s - s) < .01, 'Helix progress must pick the correct deck.');
+      }
+    }
+  }
+}
+
 await initPhysics();
 let failures = 0;
 for (const id of courseIds) {
   if (courseFilter && id !== courseFilter) continue;
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
-  if (id === 'frostline') checkFrostlineTransitions(track);
+  if (id === 'frostline' || id === 'timber') checkSectionStarts(track);
+  if (id === 'timber') checkTimberLevels(track);
+  if (id === 'wireworks') checkWireworksContacts(track);
 }
 assert.equal(failures, 0, failures + ' heats failed; see the courses and seeds above.');

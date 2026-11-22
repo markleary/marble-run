@@ -1,0 +1,100 @@
+{
+  "seed": 1464815428,
+  "origin": {
+    "x": -22,
+    "z": -12,
+    "angle": 0
+  },
+  "laneCount": 6,
+  "halfWidth": 3.69,
+  "startS": 1.1,
+  "finishS": 128.74531773342738,
+  "drumRadius": 7.804193540196866,
+  "turnDrop": 5.5668271107366305,
+  "launchTrims": [
+    2.5,
+    2.1,
+    1.5,
+    1,
+    0.65,
+    0
+  ],
+  "runs": [
+    {
+      "length": 12,
+      "curvature": 0
+    },
+    {
+      "length": 12.258798546537696,
+      "curvature": 0.12813623788919698
+    },
+    {
+      "length": 12.258798546537696,
+      "curvature": 0.12813623788919698
+    },
+    {
+      "length": 12.258798546537696,
+      "curvature": 0.12813623788919698
+    },
+    {
+      "length": 12.258798546537696,
+      "curvature": 0.12813623788919698
+    },
+    {
+      "length": 12.258798546537696,
+      "curvature": 0.12813623788919698
+    },
+    {
+      "length": 7,
+      "curvature": 0
+    },
+    {
+      "length": 17.425367251911386,
+      "curvature": -0.12820512820512822
+    },
+    {
+      "length": 6,
+      "curvature": 0
+    },
+    {
+      "length": 11.225957748827527,
+      "curvature": 0.14925373134328357
+    },
+    {
+      "length": 17,
+      "curvature": 0
+    }
+  ],
+  "sections": [
+    {
+      "name": "Joiner's Gate",
+      "start": 0,
+      "end": 12
+    },
+    {
+      "name": "High Spiral",
+      "start": 12,
+      "end": 48.77639563961309
+    },
+    {
+      "name": "Lower Spiral",
+      "start": 48.77639563961309,
+      "end": 73.29399273268848
+    },
+    {
+      "name": "Trestle Switchbacks",
+      "start": 73.29399273268848,
+      "end": 114.94531773342739
+    },
+    {
+      "name": "Reeding Run",
+      "start": 114.94531773342739,
+      "end": 123.94531773342737
+    },
+    {
+      "name": "Felt Finish",
+      "start": 123.94531773342737,
+      "end": 131.94531773342737
+    }
+  ]
+}

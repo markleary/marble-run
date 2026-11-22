@@ -32,7 +32,7 @@ const ui = createUI(document.querySelector('#ui')!, {
   onSetup() {
     racingState = 'setup';
     heat?.dispose(); heat = undefined;
-    sound.stopRolling(); broadcast?.preview();
+    sound.stopRolling(); sound.stopMusic(); broadcast?.preview();
     previewDirty = true;
     broadcast?.entrants(ui.previewRacers());
   },
@@ -89,6 +89,7 @@ async function boot() {
     heat?.dispose(); sound.stopRolling();
     entrants = field;
     heat = new RaceSimulation(track, entrants.length, crypto.getRandomValues(new Uint32Array(1))[0]);
+    sound.startMusic(track.id);
     broadcast!.entrants(entrants);
     countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastHUD = -1;
     racingState = 'countdown';
@@ -137,18 +138,22 @@ async function boot() {
         lastFinishCount = finishedCount;
       }
       if (heat.failure) {
-        racingState = 'failure'; sound.stopRolling(); ui.showFailure(heat.failure); return;
+        racingState = 'failure'; sound.stopRolling(); sound.stopMusic(); ui.showFailure(heat.failure); return;
       }
       if (heat.finished) {
         racingState = 'results'; settling = 2;
-        ui.showResults(ordered()); sound.stopRolling(); broadcast!.podium();
+        ui.showResults(ordered()); sound.stopRolling(); sound.stopMusic(); broadcast!.podium();
       } else if (heat.elapsed - lastHUD >= 0.08) {
         lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered());
         const active = heat.marbles.filter(m => m.finishTime === null);
-        const speed = active.reduce((sum, m) => sum + m.speed, 0) / active.length;
-        const wood = active.filter(m => track.surfaceAt(m.distance) === 'wood').length / active.length;
-        const ice = active.filter(m => track.surfaceAt(m.distance) === 'ice').length / active.length;
-        sound.rolling(speed, wood, ice);
+        const surfaces = { lacquer: 0, wood: 0, ice: 0, wire: 0 };
+        let rolling = 0, speed = 0;
+        for (const marble of active) {
+          const surface = heat.rollingSurface(marble);
+          if (surface) { surfaces[surface]++; speed += marble.speed; rolling++; }
+        }
+        if (rolling) sound.rolling(speed / rolling, surfaces.wood / rolling, surfaces.ice / rolling, surfaces.wire / rolling);
+        else sound.stopRolling();
       }
       broadcast!.update(heat.marbles, Math.min(1, accumulator / FIXED_DT), dt, heat.elapsed);
     } else if (racingState === 'results' && settling > 0) {
@@ -160,13 +165,17 @@ async function boot() {
   }
   requestAnimationFrame(frame);
 }
-document.addEventListener('visibilitychange', () => { lastTimestamp = 0; if (document.hidden) sound.stopRolling(); });
+document.addEventListener('visibilitychange', () => {
+  lastTimestamp = 0;
+  sound.setPaused(document.hidden || contextLost);
+});
 canvas.addEventListener('webglcontextlost', event => {
-  event.preventDefault(); contextLost = true; sound.stopRolling();
+  event.preventDefault(); contextLost = true; sound.setPaused(true);
   announceProblem('Graphics paused. Restoring the track…');
 });
 canvas.addEventListener('webglcontextrestored', () => {
   contextLost = false; lastTimestamp = 0; previewDirty = true; settling = 2;
+  sound.setPaused(document.hidden);
   document.querySelector('.runtime-notice')?.remove();
 });
 boot().catch(error => {

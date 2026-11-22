@@ -1,12 +1,12 @@
 # Marble Run course roadmap
 
-Prism Speedway and Frostline Rally support two to six named racers. Each uses a fixed, pre-generated layout. Timber Corkscrew and Wireworks Drop are planned for future releases.
+All four courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
 | Prism Speedway | Playable | Sunlit racing workbench | Six lacquered lanes rolling into opposing banks and a shared timber finish | About 35–45 seconds |
-| Timber Corkscrew | Planned | Cabinetmaker’s bench | Open wooden helix around a drum | 35–50 seconds |
-| Wireworks Drop | Planned | Metalworking exhibit | Wire descent followed by two competing routes | 40–55 seconds |
+| Timber Corkscrew | Playable | Cabinetmaker’s bench | Open wooden helix around a drum | 35–50 seconds |
+| Wireworks Drop | Playable | Metalworking exhibit | Wire descent followed by two competing routes | 40–55 seconds |
 | Frostline Rally | Playable | Snowy village square | Low-friction ice sweeper and a deflector field | 40–60 seconds |
 
 ## Prism Speedway
@@ -19,21 +19,21 @@ The wider grid keeps the original sequence of rollers, opposing banks and timber
 
 **Race sequence.** The timber start gate feeds a short, grooved launch. The dividers taper before a long descending helix around a central wooden drum. An outside line builds speed, while the inside line covers less distance. A broad exit leads into two opposite switchbacks, a shallow grooved descent and a short sprint into a felt-lined catch tray.
 
-**Geometry and materials.** Generate the helix from radius, pitch and turn count. Sample the floor and lip with the same cross section for rendering and collision. Give adjacent levels enough vertical clearance for a marble, its guardrail and an unobstructed exterior camera angle. Describe the wood with bent plywood edges, staggered planks and a dark rail. The timing section remains open across its width.
+**Geometry and materials.** An open, descending helix wraps 1¼ turns around a maple drum. Its radius, pitch and clearance are baked into the course layout. Plywood edges, drum staves, brass hoops and cantilever arms frame a continuous wooden running surface. The two decks have enough clearance for six marbles to pass beneath the upper turn.
 
-**Progress and cameras.** Use the previous course segment and elevation when projecting a marble onto the helix. Two marbles can have nearly identical horizontal positions on separate levels. Set one exterior camera on the drum’s open side and hold a side-by-side pair through the bend. Pick up the exit from downstream before cutting to the switchbacks.
+**Progress and cameras.** Both the previous track segment and the marble’s elevation identify the current deck. The camera follows the outside of the helix to keep the drum behind the pack. A downstream view picks up the exit and the trestle switchbacks.
 
-**Acceptance.** No jumps in displayed rank when marbles pass above each other. The inside edge cannot trap a slow marble. All five field sizes must clear the helix and the switchback joints. Review slow and fast examples from inside and outside starts; verify the drum never hides the selected marble for an entire turn.
+**Acceptance.** All 500 release heats finished in 37.61–47.77 seconds. Every grid slot won at every field size. Check for jumps in displayed rank when marbles pass above each other. The inside edge cannot trap a slow marble. All five field sizes must clear the helix and the switchback joints. Review slow and fast examples from inside and outside starts; verify the drum never hides the selected marble for an entire turn.
 
 ## Wireworks Drop
 
 **Race sequence.** A high gate releases the field onto six chutes on paired wire rails. The rails curl downward and level out over a wooden catch deck. A broad splitter routes marbles around a support tower. The inner branch takes a short, tight line, and the outer branch takes a longer, gentler descent. Both feed a wide, banked reunion and a straight finish.
 
-**Geometry and materials.** Generate the two rails in each chute from a common centerline and clearance profile. Test sphere contact at entry, maximum curvature and exit; the visual gap between the rails must match what supports the marble. Use a tangent joint at the catch deck and a rounded nose on the splitter. Span the drop with curved painted braces, leaving the sides open to the camera.
+**Geometry and materials.** The twelve cylindrical rails support the marbles directly. The running surface beneath each marble meets the wooden catch deck, where the rails sink into the wood. After the deck, the fork has its own floors and guards around a central tower. Both routes return to a common racing surface before the timing stripe.
 
-**Progress and cameras.** Give each branch its own route and checkpoints. Map both branches to common progress between split and merge for live rankings; use physical crossing time at the finish. A wide fixed shot should contain both exits and the merge so the viewer can see which line paid off. Use a side shot on the wire drop to show the change in elevation.
+**Progress and cameras.** Each branch maps its traveled distance to shared checkpoints between the split and the merge. Finish times use the marble’s physical crossing of the stripe. A side shot shows the descent. A fixed shot covers the tower and the two routes in landscape and portrait. The race audio blends in a steel-wire rattle while marbles occupy the rails.
 
-**Acceptance.** Test isolated marbles on each route and six marbles arriving together. Check for wedging at the splitter, falling between rails, and colliding with a seam at the reunion. Sample branch use and finish order across many seeds. Tune branch geometry if one route always loses. Add a wire-rattle sound layer driven by contact with the rail section.
+**Acceptance.** All 500 release heats finished in 34.23–45.65 seconds. Both branches won at every field size. Test isolated marbles on each route and six marbles arriving together. Check for wedging at the splitter, falling between rails, and colliding with a seam at the reunion. Sample branch use and finish order across many seeds. Tune branch geometry if one route always loses. Verify the wire rattle gives way to the timber roll on the catch deck.
 
 ## Frostline Rally
 

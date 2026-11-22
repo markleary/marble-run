@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { CourseTrack } from './track';
+import type { CourseTrack, CourseSurface } from './track';
 
 export const FIXED_DT = 1 / 60;
 const GRAVITY = 5.4;
@@ -62,6 +62,7 @@ export class RaceSimulation {
   private readonly events: RAPIER.EventQueue;
   private readonly bodies: RAPIER.RigidBody[] = [];
   private readonly idByCollider = new Map<number, number>();
+  private readonly surfaceByCollider = new Map<number, CourseSurface>();
   private readonly checkpoints: { distance: number; time: number }[] = [];
   private readonly lastImpact: number[] = [];
   private readonly finishLine: ReturnType<CourseTrack['sample']>;
@@ -77,13 +78,13 @@ export class RaceSimulation {
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     this.world.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
-    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42 };
+    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42, wire: 0.40 };
     for (const mesh of track.collisions) {
       const collider = RAPIER.ColliderDesc.trimesh(
         mesh.vertices, mesh.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES,
       ).setFriction(friction[mesh.surface]).setRestitution(0.08);
       if (mesh.surface === 'ice') collider.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
-      this.world.createCollider(collider);
+      this.surfaceByCollider.set(this.world.createCollider(collider).handle, mesh.surface);
     }
     for (const peg of track.deflectors) {
       const floor = track.sample(peg.s, peg.lateral);
@@ -131,6 +132,20 @@ export class RaceSimulation {
     this.racing = true;
   }
 
+  rollingSurface(marble: MarbleState): CourseSurface | undefined {
+    const ball = this.bodies[marble.id].collider(0);
+    const preferred = this.track.surfaceAt(marble.distance);
+    let result: CourseSurface | undefined;
+    this.world.contactPairsWith(ball, other => {
+      const surface = this.surfaceByCollider.get(other.handle);
+      if (!surface || result === preferred) return;
+      this.world.contactPair(ball, other, manifold => {
+        if (manifold.numSolverContacts()) result = surface;
+      });
+    });
+    return result;
+  }
+
   step(): readonly Impact[] {
     this.impacts.length = 0;
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
@@ -173,7 +188,7 @@ export class RaceSimulation {
     const { track, finishLine } = this;
     const p = marble.position;
     const previous = marble.previousPosition;
-    const nearest = track.locate(p.x, p.z, marble.distance);
+    const nearest = track.locate(p.x, p.z, marble.distance, p.y);
     marble.distance = nearest.s;
     marble.progress = Math.max(0, Math.min(1, (nearest.s - track.startS) / (track.finishS - track.startS)));
 
