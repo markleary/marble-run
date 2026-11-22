@@ -41,7 +41,7 @@ button svg, .standings-empty svg { width: 19px; height: 19px; flex: none; }
 .top-actions { display: flex; align-items: center; gap: 13px; }
 .top-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 11px; border: 0; background: transparent; font-size: 14px; font-weight: 600; }
 .top-button:hover, .icon-button:hover { background: #e9e8df; }
-.sound-button { padding: 0; width: 39px; border: 1px solid #c4cbbb; border-radius: 50%; }
+.sound-button, .fullscreen-button { padding: 0; width: 39px; border: 1px solid #c4cbbb; border-radius: 50%; }
 .standings-button svg { color: #56645a; }
 .preview-caption { position: fixed; left: 0; right: var(--sidebar); bottom: 0; padding: 6vh clamp(20px, 3.7vw, 64px) clamp(22px, 4vh, 46px); color: white; background: linear-gradient(0deg,rgba(15,28,25,.85),rgba(15,28,25,.47) 58%,transparent); text-shadow: 0 1px 8px #1729243b; }
 .preview-label, .small-label, .table-key, .on-air { font: 500 10px/1.3 var(--mono); text-transform: uppercase; letter-spacing: 1.25px; }
@@ -69,6 +69,7 @@ legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 [data-course=frostline] .track-stripes { background: linear-gradient(90deg,#47a4c3 0 33%,#c7e6ed 33% 66%,#728eac 66%); }
 [data-course=orrery] .track-stripes { background: linear-gradient(90deg,#354969 0 33%,#d8aa55 33% 66%,#858bc1 66%); }
 [data-course=tideglass] .track-stripes { background: linear-gradient(90deg,#38988c 0 33%,#b0e1ce 33% 66%,#af754b 66%); }
+[data-course=kepler] .track-stripes { background: linear-gradient(90deg,#5765aa 0 33%,#eea25d 33% 66%,#55dcd8 66%); }
 .result-course { color: var(--muted); margin-bottom: 6px; font: 600 15px/1.2 var(--sans); }
 .count-choices { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 5px; margin-top: 12px; }
 .count-choices button { min-height: 47px; display: flex; align-items: baseline; justify-content: center; gap: 4px; padding: 7px 2px; border: 1px solid #c6cbbd; border-radius: 4px; background: transparent; }
@@ -174,7 +175,7 @@ body:is([data-view=race],[data-view=countdown]) .top-button { color: var(--paper
   .brand-mark { transform: scale(.87); transform-origin: left center; width: 31px; }
   .top-actions { gap: 2px; }
   .top-button { min-height: 36px; font-size: 13px; gap: 5px; }
-  .sound-button { width: 35px; }
+  .sound-button, .fullscreen-button { width: 35px; }
   #scene { position: absolute; top: var(--header); width: 100%; height: var(--preview-height); }
   .preview-caption { position: absolute; top: calc(var(--header) + var(--preview-height)); right: 0; bottom: auto; transform: translateY(-100%); padding: 20px 18px 13px; }
   .preview-label { font-size: 8px; letter-spacing: 1.1px; }
@@ -207,6 +208,9 @@ body:is([data-view=race],[data-view=countdown]) .top-button { color: var(--paper
   .race-hud { top: max(9px, env(safe-area-inset-top)); left: 8px; width: min(164px, 48vw); }
   .hud-title { padding: 7px 8px; }
   .running-order li { padding: 4px 8px; font-size: 13px; gap: 5px; }
+}
+@media (max-width: 360px) {
+  .standings-button span { display: none; }
 }
 @media (max-height: 490px) and (orientation: landscape) and (min-width: 600px) {
   :root { --header: 42px; --sidebar: clamp(244px, 31vw, 310px); }

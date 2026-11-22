@@ -37,10 +37,11 @@ const scores = [
   ['frostline', 108, 'Snowy alpine rally village. Airy winter chamber score in 4/4 with felt piano, warm sustained string trio, and a lilting clarinet countermelody over plucked bass. An optimistic flowing pulse. Keep the high register very soft.'],
   ['orrery', 112, 'Midnight Orrery, a miniature brass clockwork observatory tracing the orbits of planets. A nocturnal chamber ostinato in E minor, gentle celesta notes turning against pulsing bass clarinet, with clipped viola harmonics and a muted French horn answer. Interlock two quiet three-note patterns across a steady four-beat measure to suggest meshing gears. Curious, precise, forward-moving.'],
   ['tideglass', 104, 'Tideglass Conservatory, a seaside glasshouse with winding aquamarine flumes and lush foliage. A breezy instrumental bossa nova in G major. A syncopated nylon-string guitar and round fretless bass carry the rhythm, a breathy alto flute plays a rising then falling phrase, soft brushed rim and shaker tucked underneath. Keep the swaying groove intimate and buoyant.'],
+  ['kepler', 110, 'Kepler Relay, an original orbital relay race score titled Signal Return. Cinematic analog space electronica in D Dorian, 4/4. Start in motion with a rounded pulsing synth bass, a warm stereo sequencer answering itself across the beat, and a little muted electronic kick. A solitary, lyrical portamento lead climbs a fourth and hangs in the air over broad, slowly opening string-synth chords. Develop the signal motif over four eight-bar phrases: a spare transmission, a busier descending sequence, an airy suspended phrase, then a low, driving reprise. Keep the pulse and harmonic turnaround continuous under the race. Warm, spacious, quietly propulsive.', 32],
 ];
 // Compare short windows of the original recording to find a matching pair of bar lines.
 // Moving the exit a little allows for an imperfect generated tempo.
-function chooseLoop(source, bpm) {
+function chooseLoop(source, bpm, loopBars) {
   const rate = 4000, frame = 80;
   const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', source, '-f', 'f32le', '-ar', String(rate), '-ac', '1', '-'], { maxBuffer: 4000000 });
   const samples = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
@@ -58,7 +59,7 @@ function chooseLoop(source, bpm) {
     envelopes.push(energy.map(v => Math.log(v / frame + 0.00001)));
   }
   const hz = rate / frame;
-  const bars = 8 * 4 * 60 / bpm * hz;
+  const bars = loopBars * 4 * 60 / bpm * hz;
   const context = Math.round(hz * 1.2);
   let best = Infinity, bestStart = 0, bestEnd = 0;
   for (let length = Math.round(bars * .87); length <= bars * 1.13; length++) {
@@ -71,13 +72,13 @@ function chooseLoop(source, bpm) {
       if (score < best) { best = score; bestStart = a; bestEnd = a + length; }
     }
   }
-  if (!bestEnd) throw new Error('Recording was too short to make an eight-bar loop.');
+  if (!bestEnd) throw new Error('Recording was too short for a ' + loopBars + '-bar loop.');
   return { start: bestStart / hz, end: bestEnd / hz };
 }
 
 const cache = new URL('../node_modules/.cache/marble-run-audio/', import.meta.url);
 await mkdir(cache, { recursive: true });
-for (const [id, bpm, brief] of scores) {
+for (const [id, bpm, brief, loopBars = 8] of scores) {
   const output = new URL('music-' + id + '.mp3', directory);
   if (await access(output).then(() => true, () => false)) continue;
   const source = new URL(id + '-source.mp3', cache);
@@ -86,8 +87,10 @@ for (const [id, bpm, brief] of scores) {
       method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_id: 'music_v2_5', force_instrumental: true,
-        music_length_ms: Math.round(12 * 4 * 60 / bpm * 1000),
-        prompt: brief + ' Instrumental music for a miniature marble race, exactly ' + bpm + ' BPM. Repeat a four-bar motif with a consistent first beat and constant orchestration for all twelve bars. Begin in the groove, continue at full pulse through the last beat. No intro, outro, breaks, vocals, sound effects, bright percussion, or big dynamic accents.',
+        music_length_ms: Math.round((loopBars + 4) * 4 * 60 / bpm * 1000),
+        prompt: brief + ' Instrumental music for a miniature marble race, exactly ' + bpm + ' BPM. ' +
+          (loopBars === 8 ? 'Repeat a four-bar motif with a consistent first beat and constant orchestration for all twelve bars.' : 'Following the final turnaround, repeat the opening four bars so the cut can loop on the downbeat.') +
+          ' Begin in the groove, continue at full pulse through the last beat. No intro, outro, breaks, vocals, sound effects, bright percussion, or big dynamic accents.',
       }),
     });
     if (!response.ok) {
@@ -98,7 +101,7 @@ for (const [id, bpm, brief] of scores) {
     if (audio.length < 1000) throw new Error('Incomplete score for ' + id);
     await writeFile(source, audio);
   }
-  const { start, end } = chooseLoop(fileURLToPath(source), bpm);
+  const { start, end } = chooseLoop(fileURLToPath(source), bpm, loopBars);
   const overlap = .16;
   // Put the crossfade at the very end. Its final sample leads directly into the
   // next sample of the recording at the loop head, preserving the pulse.

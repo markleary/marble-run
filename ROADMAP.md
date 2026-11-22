@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All six courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All seven courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -10,6 +10,7 @@ All six courses support two to six named racers and use fixed, pre-generated lay
 | Frostline Rally | Playable | Snowy village square | Low-friction ice sweeper and a deflector field | 40–60 seconds |
 | Midnight Orrery | Playable | Tabletop observatory | Pendulum gallery, orbital underpass and two Comet Skips jumps | 51–78 seconds |
 | Tideglass Conservatory | Playable | Coastal botanical glasshouse | Standing-wave half-pipe and twin molded sluices | 54–68 seconds |
+| Kepler Relay | Playable | Orbital communications station | Gravity dive and ballistic transfer from alloy to aurora glass | At least 60 seconds to first place |
 
 ## Prism Speedway
 
@@ -60,6 +61,14 @@ All 1,000 seeded heats finished in 50.58–77.71 seconds, and every grid slot wo
 Six wooden chutes feed the 182-unit glasshouse race. The Propagation Esses lead around Lily Basin into the Standing Wave Gallery, where the low point of the half-pipe moves from side to side along the flume. A marble can climb a shoulder and fall back through the trough. Beyond Fernbank Turn, a raised glass ridge curves inward from the outside racing line to form the Twin Frond Sluice. The ridge tapers away before the Mist Garden and wooden Estuary Landing. Alto flute and nylon-string guitar carry the bossa nova soundtrack.
 
 **Cameras and acceptance.** Follow the outside of the two basin turns and look across the trough from the open side of the glasshouse. Keep both sluices in view as the pack separates and rejoins. All 500 seeded heats finished in 54.41–68.05 seconds. Both sluices and every starting slot produced winners at each field size. Six-marble packs also cleared the course from rest at each section entrance.
+
+## Kepler Relay
+
+Six launch channels feed the Solar Array Esses. After the banked Magnetosphere turn, alternating crossfalls on Telemetry Straight shift the pack sideways. Far Side Turn lines the marbles up for Gravity Dive. The 16-unit descent reaches a 40° grade and flows into a five-unit rising lip. Each marble carries its own momentum across the eight-unit gap to Aurora Catch. Dotted side shields catch angled launches. Short trails in each racer's color trace the flight. The blue glass has a shallow landing bed and shoulders that curl up into an open half-pipe. The outside shoulder rises through each bend of Orbital Return, guiding fast marbles through the change of direction. The glass levels out toward the finish beacon. The course plays “Signal Return,” a 69.54-second instrumental with a stereo sequencer, string-synth pads and a gliding lead.
+
+**Cameras and acceptance.** An overview frames the station against a nebula. The broadcast tracks the marbles from the side through takeoff and touchdown. An elevated rear three-quarter view follows the pack down the open glass trough. Keep the receiving lip and marbles visible in both landscape and portrait. Measure from gate release to the first finish, with a minimum of 60 seconds. For every racer, check for at least two seconds without floor support, including ascent and descent, followed by supporting contact with the glass. In the two-marble heat with seed 2, each marble must keep at least 90% of its entry forward speed throughout Orbital Return and avoid contact with the upright rim on either side.
+
+All 500 seeded heats finished. Winners crossed in 63.72–70.01 seconds, and the final marble crossed in 65.20–76.98 seconds. All 2,000 marbles landed after 2.63–3.72 seconds airborne. Every starting slot won at every field size. Across the same 100 six-marble grids, median forward speed at the exit of Orbital Return rose from 2.73 to 6.78 units per second. One of the 600 marbles touched a vertical guard in the bends, down from 589 on the original receiver.
 
 ## Adding courses to the game
 

@@ -4,6 +4,7 @@ import type { CourseTrack, TrackSample } from '../src/track';
 import { courseIds } from '../src/courses/catalog';
 import timberLayout from '../src/courses/timber-layout.json';
 import wireworksLayout from '../src/courses/wireworks-layout.json';
+import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
@@ -40,6 +41,7 @@ function exerciseField(track: CourseTrack, count: number) {
   const wins = Array<number>(track.laneCount).fill(0);
   const starts = Array<number>(track.laneCount).fill(0);
   const durations: number[] = [];
+  const transferSeconds: number[] = [], winnerSeconds: number[] = [];
   const sluice = track.sections.find(section => section.name === 'Twin Frond Sluice');
   const branchMidpoint = track.id === 'wireworks' ? (wireworksLayout.forkStart + wireworksLayout.forkEnd) / 2
     : sluice ? (sluice.start + sluice.end) / 2 : undefined;
@@ -63,8 +65,10 @@ function exerciseField(track: CourseTrack, count: number) {
       race.release();
       const branches = new Map<number, number>();
       let mergeLeader: number | undefined;
+      const transfer = track.id === 'kepler' ? measureKeplerTransfer(race) : undefined;
       while (!race.finished && !race.failure) {
         race.step();
+        transfer?.observe();
         if (branchCenter && branchMidpoint !== undefined && branches.size < count) {
           for (const marble of race.marbles) {
             if (marble.distance < branchMidpoint || branches.has(marble.id)) continue;
@@ -96,6 +100,12 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.equal(race.elapsed, finishClock, 'coasting must preserve the race clock');
           assert.deepEqual(race.marbles.map(m => m.finishTime), replayFinishTimes);
         }
+        if (transfer) {
+          const winnerTime = finishers[0].finishTime!;
+          assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
+          winnerSeconds.push(winnerTime);
+          transferSeconds.push(...transfer.seconds(seed));
+        }
         wins[finishers[0].slot]++;
         if (branchCenter) {
           assert.equal(branches.size, count);
@@ -121,6 +131,11 @@ function exerciseField(track: CourseTrack, count: number) {
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
     ...(branchCenter && { branchStarts, branchWins }),
     ...(forkExit && { mixedBranchHeats: mixed }),
+    ...(transferSeconds.length && {
+      transfers: transferSeconds.length,
+      jumpAirSeconds: [Math.min(...transferSeconds), Math.max(...transferSeconds)].map(s => +s.toFixed(2)),
+      winnerSeconds: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
+    }),
   }));
   if (forkExit && count === track.laneCount && repetitions >= 100) {
     assert.ok(mixed.heats >= .80 * repetitions, 'Both Wireworks branches must be used in at least 80% of full-field heats.');
@@ -145,7 +160,11 @@ function exerciseField(track: CourseTrack, count: number) {
 function checkSectionStarts(track: CourseTrack) {
   // Every downstream section must let a pack accelerate again from rest.
   for (const section of track.sections.slice(1)) {
-    const race = new RaceSimulation({ ...track, startS: section.start }, track.laneCount, firstSeed);
+    // The uphill transfer lip needs the preceding gravity dive as its run-up.
+    if (track.id === 'kepler' && section.name === 'Vacuum Transfer') continue;
+    // Stand fully on the receiving plate, downstream of its exposed leading edge.
+    const startS = section.start + (track.id === 'kepler' && section.name === 'Aurora Catch' ? track.radius : 0);
+    const race = new RaceSimulation({ ...track, startS }, track.laneCount, firstSeed);
     try {
       race.release();
       while (!race.finished && !race.failure) race.step();
@@ -178,7 +197,8 @@ for (const id of courseIds) {
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
-  if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass') checkSectionStarts(track);
+  if (id === 'kepler') checkKeplerReceiver(track);
+  if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass' || id === 'kepler') checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
   if (id === 'orrery') {

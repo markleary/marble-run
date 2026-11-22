@@ -80,7 +80,7 @@ export class RaceSimulation {
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     this.world.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
-    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42, wire: 0.40, glass: 0.31 };
+    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42, wire: 0.40, glass: 0.31, alloy: 0.38 };
     for (const mesh of track.collisions) {
       const collider = RAPIER.ColliderDesc.trimesh(
         mesh.vertices, mesh.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES,

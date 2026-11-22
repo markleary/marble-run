@@ -6,9 +6,12 @@ import { FIXED_DT } from './simulation';
 import type { CourseTrack } from './track';
 import type { CourseId } from './courses/catalog';
 import { createCourseScenery, type CourseScenery } from './scenery';
+import keplerNebula from './assets/kepler-nebula.jpg';
+import { createKeplerTrails } from './keplerTrails';
+import { keplerStars } from './keplerStars';
 
 type Offset = [number, number, number];
-interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean }
+interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean; holdPastEnd?: number }
 const shots: Record<CourseId, Shot[]> = {
   prism: [
     { offset: [4.5, 4.2, -7.8] }, { offset: [4.5, 4.2, -7.8] },
@@ -49,6 +52,20 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [2, 8, 10], trackRelative: true }, { offset: [4, 10, 10] },
     { offset: [-4, 8, 9] }, { offset: [4, 6, 10] },
   ],
+  kepler: [
+    { offset: [4, 5.5, 10], trackRelative: true },
+    { offset: [-4, 7.5, 10], trackRelative: true },
+    { offset: [-2, 8.5, -11], trackRelative: true },
+    { offset: [-5, 6.5, 10], trackRelative: true },
+    { offset: [2, 7, 10], trackRelative: true },
+    { offset: [-4, 5.8, 12], trackRelative: true },
+    // Track the balls across the empty span and through first contact down the catch deck.
+    { offset: [1.5, 6.6, 17.5], portraitOffset: [5.5, 5.4, 11], trackRelative: true, holdPastEnd: 12 },
+    { offset: [-6.2, 7.5, 6.8], trackRelative: true },
+    // Look down the open trough so its high outside shoulder never fills the foreground.
+    { offset: [-7.8, 8.5, 4.8], portraitOffset: [-8.4, 7.1, 3.2], trackRelative: true },
+    { offset: [-5.4, 7.0, 6.8], trackRelative: true },
+  ],
 };
 
 const settings: Record<CourseId, { sky: string; fog: string; haze: number; preview: Offset; finishApproach?: number }> = {
@@ -58,6 +75,7 @@ const settings: Record<CourseId, { sky: string; fog: string; haze: number; previ
   wireworks: { sky: '#b4cbd0', fog: '#c4d0cc', haze: 0.004, preview: [0.9, 1.02, 1.22] },
   orrery: { sky: '#17283c', fog: '#293c55', haze: 0.003, preview: [0.52, 1.05, 1.27], finishApproach: 2.8 },
   tideglass: { sky: '#cbe1d3', fog: '#d1e2d8', haze: 0.0042, preview: [0.48, 1.28, 1.45] },
+  kepler: { sky: '#070b18', fog: '#18203c', haze: 0.0014, preview: [-0.53, 0.85, 1.38] },
 };
 
 function disposeScenery(root: THREE.Group) {
@@ -65,7 +83,7 @@ function disposeScenery(root: THREE.Group) {
   const materials = new Set<THREE.Material>();
   const textures = new Set<THREE.Texture>();
   root.traverse(object => {
-    if (!(object instanceof THREE.Mesh)) return;
+    if (!(object instanceof THREE.Mesh || object instanceof THREE.Points)) return;
     geometries.add(object.geometry);
     for (const mat of Array.isArray(object.material) ? object.material : [object.material]) materials.add(mat);
     if (object instanceof THREE.InstancedMesh) object.dispose();
@@ -123,6 +141,7 @@ function pickMarker() {
 
 export class RaceBroadcast {
   private renderer: THREE.WebGLRenderer;
+  private sun = new THREE.DirectionalLight('#ffecd1', 2.3);
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(35, 1, 0.12, 450);
   private focus = new THREE.Vector3();
@@ -136,6 +155,7 @@ export class RaceBroadcast {
   private favorite = -1;
   private gate = new THREE.Group();
   private scenery?: CourseScenery;
+  private trails?: ReturnType<typeof createKeplerTrails>;
   private previewCenter = new THREE.Vector3();
   private cameraRight = new THREE.Vector3();
   private cameraUp = new THREE.Vector3();
@@ -163,7 +183,7 @@ export class RaceBroadcast {
     environment.dispose(); pmrem.dispose();
 
     this.scene.add(new THREE.HemisphereLight('#fff7e4', '#918878', 0.9));
-    const sun = new THREE.DirectionalLight('#ffecd1', 2.3);
+    const sun = this.sun;
     sun.position.set(-18, 38, -22);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -192,9 +212,24 @@ export class RaceBroadcast {
     }
     this.track = track;
     const theme = settings[track.id];
+    if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose();
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.FogExp2(theme.fog, theme.haze);
-    this.scenery = createCourseScenery(track);
+    const redraw = () => {
+      if (this.track === track && (this.mode === 'preview' || this.mode === 'podium')) this.renderer.render(this.scene, this.camera);
+    };
+    if (track.id === 'kepler') {
+      const sky = new THREE.TextureLoader().load(keplerNebula, redraw);
+      sky.mapping = THREE.EquirectangularReflectionMapping;
+      sky.colorSpace = THREE.SRGBColorSpace;
+      this.scene.background = sky;
+    } else {
+      this.sun.target.position.set(0, 0, 0);
+      this.sun.position.set(-18, 38, -22);
+    }
+    this.scenery = createCourseScenery(track, redraw);
+    if (track.id === 'kepler') this.scenery.add(keplerStars(this.renderer.getPixelRatio()));
+    this.trails = track.id === 'kepler' ? createKeplerTrails(this.scenery, track) : undefined;
     this.scene.add(this.scenery);
     this.gate = new THREE.Group();
     const stopShape = new THREE.BoxGeometry(0.13, 0.42, track.laneWidth * 0.65);
@@ -276,11 +311,18 @@ export class RaceBroadcast {
         }
       }
     }
+    if (this.track.id === 'kepler' && this.canvas.clientHeight < 360) {
+      this.focusGoal.addScaledVector(up, -distance * tan * .14);
+    }
+    // Fitting a long course in a tall viewport can place the overview camera hundreds of units away.
+    this.camera.far = Math.max(450, distance + 220);
+    this.camera.updateProjectionMatrix();
     this.positionGoal.copy(this.focusGoal).addScaledVector(direction, distance);
     this.snap();
   }
 
   entrants(racers: Racer[]) {
+    this.trails?.reset(racers.map(racer => racer.color));
     for (const mesh of this.balls) {
       this.scene.remove(mesh);
       mesh.material.map?.dispose(); mesh.material.dispose();
@@ -327,7 +369,10 @@ export class RaceBroadcast {
       this.marker.position.copy(this.balls[this.favorite].position);
       this.marker.position.y += this.track.radius * 2.5;
     }
-    if (this.mode === 'race') this.racingShot(marbles, elapsed);
+    if (this.mode === 'race') {
+      this.racingShot(marbles, elapsed);
+      this.trails?.update(marbles, this.balls, displayTime);
+    }
     if (this.mode === 'podium') {
       const end = this.track.sample(this.track.finishS + 1.9);
       this.focusGoal.set(end.x, end.y + 0.35, end.z);
@@ -337,6 +382,11 @@ export class RaceBroadcast {
     const smooth = 1 - Math.exp(-dt * 5);
     this.eyes.lerp(this.positionGoal, smooth); this.focus.lerp(this.focusGoal, smooth);
     this.camera.position.copy(this.eyes); this.camera.lookAt(this.focus);
+    if (this.track.id === 'kepler') {
+      // The relay spans more than the studio shadow camera. Keep contact shadows on the racing pack.
+      this.sun.target.position.copy(this.focus);
+      this.sun.position.set(this.focus.x - 18, this.focus.y + 38, this.focus.z - 22);
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -348,7 +398,8 @@ export class RaceBroadcast {
     const center = (lead + pack[pack.length - 1].distance) / 2;
     const spread = lead - pack[pack.length - 1].distance;
     const p = this.track.sample(center + 0.75);
-    const id = this.track.sections.findIndex(section => lead < section.end);
+    const coverage = shots[this.track.id];
+    const id = this.track.sections.findIndex((section, i) => lead < section.end + (coverage[i].holdPastEnd ?? 0));
     const finish = lead >= this.track.finishS - (settings[this.track.id].finishApproach ?? 8);
     const finishShot = this.track.sections.length;
     const next = finish ? finishShot : Math.max(0, id);
