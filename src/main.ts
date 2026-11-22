@@ -14,7 +14,7 @@ let broadcast: RaceBroadcast | undefined;
 let entrants: Racer[] = [];
 let racingState: 'setup' | 'countdown' | 'race' | 'results' | 'failure' = 'setup';
 let stageHeat: ((field: Racer[], format: CruxFormat) => void) | undefined;
-let previewDirty = true;
+let requestFrame: (() => void) | undefined;
 let countdownRemaining = 0;
 let accumulator = 0;
 let lastHUD = -1;
@@ -22,6 +22,9 @@ let lastFinishCount = 0;
 let lastTimestamp = 0;
 let settling = 0;
 let contextLost = false;
+let pageHidden = false;
+let screenLock: WakeLockSentinel | undefined;
+let requestingScreenLock = false;
 let previewKey = '';
 let selectedCourse: CourseId = 'prism';
 let changeCourse: ((id: CourseId) => void) | undefined;
@@ -35,8 +38,8 @@ const ui = createUI(document.querySelector('#ui')!, {
     racingState = 'setup';
     heat?.dispose(); heat = undefined;
     sound.stopRolling(); sound.stopMusic(); broadcast?.preview();
-    previewDirty = true;
     broadcast?.entrants(ui.previewRacers());
+    requestFrame?.();
   },
   onSound(enabled) {
     sound.enable(enabled);
@@ -48,9 +51,11 @@ const ui = createUI(document.querySelector('#ui')!, {
       changeCourse?.(course);
     }
     const key = [course, ...field.map(r => r.color)].join('/');
-    if (key !== previewKey) broadcast?.entrants(field);
+    if (key !== previewKey) {
+      broadcast?.entrants(field);
+      requestFrame?.();
+    }
     previewKey = key;
-    previewDirty = true;
   }
 });
 sound.enable(ui.soundEnabled());
@@ -59,6 +64,32 @@ function ordered(): RaceRow[] {
   if (!heat) return [];
   return [...heat.marbles].sort(compareRacePosition)
     .map(m => ({ id: entrants[m.id].id, finishTime: m.finishTime, cutAt: m.cutAt }));
+}
+
+function isSuspended() {
+  return document.hidden || pageHidden || contextLost;
+}
+
+function watchingHeat() {
+  return !isSuspended() && (racingState === 'countdown' || racingState === 'race');
+}
+
+// A spectator may watch a two-minute heat without touching the screen.
+async function syncScreenLock() {
+  if (!watchingHeat()) {
+    const previous = screenLock;
+    screenLock = undefined;
+    await previous?.release().catch(() => {});
+    return;
+  }
+  if (!navigator.wakeLock || requestingScreenLock || (screenLock && !screenLock.released)) return;
+  requestingScreenLock = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (watchingHeat()) screenLock = lock;
+    else await lock.release();
+  } catch { /* The OS can decline the request in power-saving mode. */ }
+  finally { requestingScreenLock = false; }
 }
 
 function announceProblem(message: string) {
@@ -93,24 +124,25 @@ async function boot() {
     broadcast!.entrants(entrants);
     countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastHUD = -1;
     racingState = 'countdown';
+    void syncScreenLock();
     ui.showCountdown(3); broadcast!.grid();
     ui.updateRace(0, ordered(), heat.competition?.gates);
     lastTimestamp = 0;
+    requestFrame?.();
   };
   ui.setReady(true);
   const resize = new ResizeObserver(() => {
-    previewDirty = true;
+    broadcast!.resize();
     if (racingState === 'results') settling = 1.5;
+    requestFrame?.();
   });
   resize.observe(canvas);
 
   function frame(now: number) {
-    requestAnimationFrame(frame);
-    if (document.hidden || contextLost) { lastTimestamp = 0; return; }
     const dt = lastTimestamp ? Math.min((now - lastTimestamp) / 1000, 0.4) : 0;
     lastTimestamp = now;
     if (racingState === 'setup') {
-      if (previewDirty) { broadcast!.update([], 1, 1, 0); previewDirty = false; }
+      broadcast!.update([], 1, 1, 0);
       return;
     }
     if (!heat) return;
@@ -138,10 +170,13 @@ async function boot() {
         lastFinishCount = finishedCount;
       }
       if (heat.failure) {
-        racingState = 'failure'; sound.stopRolling(); sound.stopMusic(); ui.showFailure(heat.failure); return;
+        racingState = 'failure'; sound.stopRolling(); sound.stopMusic(); ui.showFailure(heat.failure);
+        void syncScreenLock();
+        return;
       }
       if (heat.finished) {
         racingState = 'results'; settling = 2;
+        void syncScreenLock();
         ui.showResults(ordered(), heat.competition?.gates); sound.stopRolling(); sound.stopMusic(); broadcast!.podium();
       } else if (heat.elapsed - lastHUD >= 0.08) {
         lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered(), heat.competition?.gates);
@@ -166,19 +201,44 @@ async function boot() {
       broadcast!.update(heat.marbles, accumulator / FIXED_DT, dt, heat.elapsed);
     }
   }
-  requestAnimationFrame(frame);
+  // Static menus and finished podiums need another frame only after an interaction or resize.
+  let framePending = false;
+  const schedule = () => {
+    if (framePending || isSuspended()) return;
+    framePending = true;
+    requestAnimationFrame(now => {
+      framePending = false;
+      if (isSuspended()) return;
+      frame(now);
+      if (racingState === 'countdown' || racingState === 'race' || (racingState === 'results' && settling > 0)) schedule();
+    });
+  };
+  requestFrame = schedule;
+  schedule();
 }
-document.addEventListener('visibilitychange', () => {
+function syncActivity() {
   lastTimestamp = 0;
-  sound.setPaused(document.hidden || contextLost);
+  const paused = isSuspended();
+  sound.setPaused(paused);
+  void syncScreenLock();
+  if (!paused) requestFrame?.();
+}
+document.addEventListener('visibilitychange', syncActivity);
+window.addEventListener('pagehide', () => {
+  pageHidden = true;
+  syncActivity();
+});
+window.addEventListener('pageshow', () => {
+  pageHidden = false;
+  syncActivity();
 });
 canvas.addEventListener('webglcontextlost', event => {
-  event.preventDefault(); contextLost = true; sound.setPaused(true);
+  event.preventDefault(); contextLost = true; syncActivity();
   announceProblem('Graphics paused. Restoring the track…');
 });
 canvas.addEventListener('webglcontextrestored', () => {
-  contextLost = false; lastTimestamp = 0; previewDirty = true; settling = 2;
-  sound.setPaused(document.hidden);
+  contextLost = false; settling = 2;
+  syncActivity();
   document.querySelector('.runtime-notice')?.remove();
 });
 boot().catch(error => {

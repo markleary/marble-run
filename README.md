@@ -6,6 +6,10 @@ Race with two to six players on one screen. Each player chooses a color and name
 
 Use the fullscreen button in the top-right corner to expand the game or return to the window on supported browsers. The control stays available during the race and on the results screen.
 
+On a phone, rotate between portrait and landscape at any point. Tap the chevron beside the race clock to expand the full running order. Switching apps pauses the race and audio until you return.
+
+To play from your home screen, choose **Install game** in race setup. On iPhone or iPad, use Safari’s **Share → Add to Home Screen** and enable **Open as Web App** if shown. On Android, follow Chrome’s install prompt or choose the install option in its menu. After the first online launch finishes downloading the game, all eight tracks and their soundtracks work offline.
+
 | Track | Race highlights | Soundtrack |
 | --- | --- | --- |
 | Prism Speedway | Six lacquered lanes, a rainbow hairpin and a shared wooden finish | Electric piano and syncopated synth-funk |

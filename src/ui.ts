@@ -6,6 +6,7 @@ import '@fontsource/barlow-condensed/latin-700.css';
 import '@fontsource/barlow-condensed/latin-800-italic.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import './style.css';
+import { setupInstall } from './install';
 import { courseIds, courses, fieldSizes } from './courses/catalog';
 import type { CourseId } from './courses/catalog';
 import type { CruxFormat } from './courses/cruxCheckpoints';
@@ -53,6 +54,8 @@ const icons = {
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   check: '<path d="m5 12 4 4 10-10"/>',
   flag: '<path d="M5 21V4c4-3 7 3 14 0v10c-7 3-10-3-14 0"/>',
+  download: '<path d="M12 3v11m-4-4 4 4 4-4M5 16v4h14v-4"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
 } as const;
 
 function icon(key: keyof typeof icons) {
@@ -172,16 +175,22 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     </div>
     <main class="side-panel"></main>
     <section class="race-hud" aria-label="Live standings" hidden>
-      <div class="hud-title"><span class="on-air"><i></i> Racing</span><time class="race-clock">0:00.00</time></div>
-      <ol class="running-order"></ol>
+      <div class="hud-title"><span class="on-air"><i></i> Racing</span><time class="race-clock">0:00.00</time>
+        <button class="order-toggle" type="button" aria-label="Full running order" aria-controls="running-order" aria-expanded="false">${icon('chevron')}</button>
+      </div>
+      <ol class="running-order" id="running-order"></ol>
       <div class="checkpoint-status" role="status" hidden></div>
     </section>
     <div class="countdown-overlay" role="status" aria-live="assertive" hidden><span class="countdown-value"></span></div>
     <div class="sr-only status-announcement" role="status"></div>
-    <dialog class="standings-dialog">
-      <div class="dialog-heading"><h2>Standings</h2><button class="icon-button close-dialog" aria-label="Close standings">${icon('close')}</button></div>
+    <dialog class="standings-dialog" aria-labelledby="standings-title">
+      <div class="dialog-heading"><h2 id="standings-title">Standings</h2><button class="icon-button close-dialog" aria-label="Close standings">${icon('close')}</button></div>
       <p class="scoring-rule">Points across all tracks. First earns 3, second earns 2, and third earns 1.</p>
       <div class="standings-content"></div>
+    </dialog>
+    <dialog class="install-dialog" id="install-help" aria-labelledby="install-title">
+      <h2 id="install-title">Install Marble Run</h2><p></p>
+      <form method="dialog"><button type="submit" class="secondary-button">Done</button></form>
     </dialog>`;
 
   function element<T extends Element>(selector: string): T { return container.querySelector<T>(selector)!; }
@@ -195,8 +204,14 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   const soundButton = element<HTMLButtonElement>('.sound-button');
   const standingsButton = element<HTMLButtonElement>('.standings-button');
   const restartButton = element<HTMLButtonElement>('.restart-button');
+  const orderToggle = element<HTMLButtonElement>('.order-toggle');
   const dialog = element<HTMLDialogElement>('.standings-dialog');
   const status = element<HTMLElement>('.status-announcement');
+  const installButton = document.createElement('button');
+  installButton.id = 'install-app';
+  installButton.type = 'button';
+  installButton.hidden = true;
+  installButton.innerHTML = icon('download') + 'Install game';
   bindFullscreen(element<HTMLButtonElement>('.fullscreen-button'), status);
 
   function previewRacers() {
@@ -216,7 +231,8 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     restartButton.hidden = !live;
     hud.hidden = !live;
     countdown.hidden = next !== 'countdown';
-    if (!live) window.scrollTo(0, 0);
+    if (!live) panel.scrollTop = 0;
+    window.scrollTo(0, 0);
   }
 
   function updateSound() {
@@ -308,7 +324,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
           <ol class="entrant-list">${config.entries.map((entry, slot) => `
             <li class="entrant-row">
               <label class="entrant-name"><span>Player ${slot + 1}</span>
-                <input type="text" aria-label="Player ${slot + 1} name" value="${escapeText(entry.name)}" maxlength="18" autocomplete="off" spellcheck="false">
+                <input type="text" aria-label="Player ${slot + 1} name" value="${escapeText(entry.name)}" maxlength="18" autocomplete="off" spellcheck="false" enterkeyhint="done">
               </label>
               <label class="entrant-color"><span>Color</span><span class="color-select"><i aria-hidden="true"></i>
                 <select aria-label="Player ${slot + 1} color">${liveries.map((livery, i) => '<option value="' + i + '">' + livery.label + '</option>').join('')}</select>
@@ -319,6 +335,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
         <label class="marker-setting"><span>Race marker</span><select aria-label="Race marker"></select></label>
         <div class="panel-bottom"><button type="submit" class="primary-button start-button">${icon('flag')}<span>Start race</span>${icon('arrow')}</button></div>
       </form>`;
+    element('.panel-title').append(installButton);
     element<HTMLButtonElement>('.start-button').disabled = !ready;
     panel.querySelectorAll<HTMLButtonElement>('[data-course]').forEach(button => {
       button.addEventListener('click', () => selectCourse(button.dataset.course as CourseId));
@@ -333,6 +350,11 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       const select = row.querySelector('select')!;
       const entry = config.entries[slot];
       input.addEventListener('input', () => { entry.name = input.value; syncSetup(); });
+      input.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' || event.isComposing || !matchMedia('(pointer: coarse)').matches) return;
+        event.preventDefault();
+        input.blur();
+      });
       select.addEventListener('change', () => {
         const next = Number(select.value);
         const other = config.entries.find(candidate => candidate.livery === next);
@@ -375,7 +397,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       const racer = racers.find((r) => r.id === entry.id);
       if (!racer) return '';
       const badge = entry.cutAt ? '<small class="cut-badge">Out</small>' : entry.finishTime != null ? icon('flag') : '';
-      return '<li' + (entry.cutAt ? ' class="cut-row"' : '') + '><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span><span class="order-badges">' + (racer.marked ? '<small>Marked</small>' : '') + badge + '</span></li>';
+      return '<li' + (entry.cutAt ? ' class="cut-row"' : '') + (racer.marked ? ' data-marked' : '') + '><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span><span class="order-badges">' + (racer.marked ? '<small>Marked</small>' : '') + badge + '</span></li>';
     }).join('');
   }
 
@@ -450,10 +472,14 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   soundButton.addEventListener('click', () => { sound = !sound; writeSetting(soundKey, sound ? 'on' : 'off'); updateSound(); actions.onSound(sound); });
   standingsButton.addEventListener('click', showStandings);
   restartButton.addEventListener('click', start);
+  orderToggle.addEventListener('click', () => {
+    orderToggle.setAttribute('aria-expanded', String(orderToggle.getAttribute('aria-expanded') !== 'true'));
+  });
   element<HTMLButtonElement>('.close-dialog').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', (event) => { if (event.target === dialog) { const b = dialog.getBoundingClientRect(); if (event.clientX < b.left || event.clientX > b.right || event.clientY < b.top || event.clientY > b.bottom) dialog.close(); } });
   updateSound();
   showSetup();
+  setupInstall(installButton, element<HTMLDialogElement>('#install-help'));
 
   return { previewRacers, showSetup, showCountdown, showRace, updateRace, showResults, showFailure, setReady, soundEnabled: () => sound };
 }
