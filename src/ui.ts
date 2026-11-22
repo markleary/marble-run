@@ -12,7 +12,7 @@ export interface Racer {
   name: string;
   color: string;
   symbol: number;
-  isPlayer: boolean;
+  marked: boolean;
 }
 
 export interface RaceRow {
@@ -63,7 +63,7 @@ function writeSetting(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* A private session can still race. */ }
 }
 
-const setupKey = 'marble-run:setup:v1';
+const setupKey = 'marble-run:setup:v2';
 const soundKey = 'marble-run:sound:v1';
 const winPrefix = 'marble-run:win:v1:';
 
@@ -78,15 +78,30 @@ function identityKey(identity: Identity) {
   return identity.color + '/' + normalizedName(identity.name).toLowerCase();
 }
 
-function readSetup() {
-  try {
-    const saved = JSON.parse(readSetting(setupKey) ?? '{}');
-    return {
-      count: [2, 3, 4].includes(saved.count) ? Number(saved.count) : 4,
-      livery: Number.isInteger(saved.livery) && liveries[saved.livery] ? Number(saved.livery) : 0,
-      name: typeof saved.name === 'string' ? normalizedName(saved.name) : liveries[0].name,
-    };
-  } catch { return { count: 4, livery: 0, name: liveries[0].name }; }
+interface Entry { name: string; livery: number }
+interface Setup { count: number; entries: Entry[]; marker: number | null }
+
+function readSetup(): Setup {
+  function read(key: string) {
+    try { return JSON.parse(readSetting(key) ?? 'null'); } catch { return null; }
+  }
+  const current = read(setupKey);
+  const hasRoster = Array.isArray(current?.entries);
+  const saved = hasRoster ? current : read('marble-run:setup:v1');
+  // The first release stored one favorite and filled the other slots in this order.
+  const favorite: number = !hasRoster && Number.isInteger(saved?.livery) && liveries[saved.livery] ? saved.livery : 0;
+  const available = [favorite, ...[3, 2, 1, 4, 5, 0].filter(color => color !== favorite)];
+  const entries = Array.from({ length: 4 }, (_, slot) => {
+    const entry = hasRoster ? saved.entries[slot] : slot === 0 ? saved : null;
+    const preferred = available.indexOf(entry?.livery);
+    const [livery] = available.splice(preferred >= 0 ? preferred : 0, 1);
+    return { livery, name: typeof entry?.name === 'string' ? normalizedName(entry.name) : liveries[livery].name };
+  });
+  return {
+    count: [2, 3, 4].includes(saved?.count) ? saved.count : 4,
+    entries,
+    marker: hasRoster && saved.marker === null ? null : [0, 1, 2, 3].includes(saved?.marker) ? saved.marker : 0,
+  };
 }
 
 function clock(seconds: number) {
@@ -151,10 +166,9 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   const status = element<HTMLElement>('.status-announcement');
 
   function previewRacers() {
-    const order = [config.livery, ...[3, 2, 1, 4, 5, 0].filter((index) => index !== config.livery)].slice(0, config.count);
-    return order.map((liveryIndex, index) => {
-      const livery = liveries[liveryIndex];
-      return { id: 'marble-' + index, name: index === 0 ? normalizedName(config.name) || livery.name : livery.name, color: livery.color, symbol: liveryIndex, isPlayer: index === 0 };
+    return config.entries.slice(0, config.count).map((entry, slot) => {
+      const livery = liveries[entry.livery];
+      return { id: 'marble-' + slot, name: normalizedName(entry.name) || livery.name, color: livery.color, symbol: entry.livery, marked: slot === config.marker };
     });
   }
 
@@ -210,10 +224,18 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   function syncSetup() {
     writeSetting(setupKey, JSON.stringify(config));
     const field = previewRacers();
-    element<HTMLElement>('.grid-roster').innerHTML = field.map((racer) => '<li>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (racer.isPlayer ? '<small>You</small>' : '') + '</li>').join('');
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
-    panel.querySelectorAll<HTMLButtonElement>('[data-livery]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.livery) === config.livery)));
-    element<HTMLElement>('.livery-name').textContent = liveries[config.livery].label;
+    panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
+      row.hidden = slot >= config.count;
+      const entry = config.entries[slot];
+      const livery = liveries[entry.livery];
+      row.style.setProperty('--livery', livery.color);
+      row.querySelector('select')!.value = String(entry.livery);
+      row.querySelector('input')!.placeholder = livery.name;
+    });
+    const marker = element<HTMLSelectElement>('.marker-setting select');
+    marker.replaceChildren(new Option('None', 'none'), ...field.map((racer, slot) => new Option('Player ' + (slot + 1) + ' · ' + racer.name, String(slot))));
+    marker.value = config.marker !== null && config.marker < config.count ? String(config.marker) : 'none';
     actions.onPreview?.(field);
   }
 
@@ -236,30 +258,41 @@ export function createUI(container: HTMLElement, actions: UIActions) {
         <fieldset class="field-size"><legend>Field size</legend><div class="count-choices" aria-label="Number of marbles">
           ${[2, 3, 4].map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b><span>marbles</span></button>').join('')}
         </div></fieldset>
-        <fieldset class="marble-choices"><legend>Your marble</legend>
-          <div class="color-heading"><span>Color</span><strong class="livery-name"></strong></div>
-          <div class="swatches">${liveries.map((livery, i) => '<button type="button" data-livery="' + i + '" aria-label="' + livery.label + '" title="' + livery.label + '" style="--livery:' + livery.color + '"><i></i></button>').join('')}</div>
-          <label class="name-label" for="marble-name">Name</label>
-          <input id="marble-name" name="marble-name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="${liveries[config.livery].name}">
+        <fieldset class="roster-editor"><legend>Starting field</legend>
+          <ol class="entrant-list">${config.entries.map((entry, slot) => `
+            <li class="entrant-row">
+              <label class="entrant-name"><span>Player ${slot + 1}</span>
+                <input type="text" aria-label="Player ${slot + 1} name" value="${escapeText(entry.name)}" maxlength="18" autocomplete="off" spellcheck="false">
+              </label>
+              <label class="entrant-color"><span>Color</span><span class="color-select"><i aria-hidden="true"></i>
+                <select aria-label="Player ${slot + 1} color">${liveries.map((livery, i) => '<option value="' + i + '">' + livery.label + '</option>').join('')}</select>
+              </span></label>
+            </li>`).join('')}</ol>
+          <p class="swap-hint">Picking a color another player has swaps your colors.</p>
         </fieldset>
-        <div class="roster-block"><h2>Starting field</h2><ul class="grid-roster"></ul></div>
+        <label class="marker-setting"><span>Race marker</span><select aria-label="Race marker"></select></label>
         <div class="panel-bottom"><button type="submit" class="primary-button start-button">${icon('flag')}<span>Start race</span>${icon('arrow')}</button></div>
       </form>`;
-    const input = element<HTMLInputElement>('#marble-name');
-    input.value = config.name;
     element<HTMLButtonElement>('.start-button').disabled = !ready;
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.addEventListener('click', () => { config.count = Number(button.dataset.count); syncSetup(); }));
-    panel.querySelectorAll<HTMLButtonElement>('[data-livery]').forEach((button) => button.addEventListener('click', () => {
-      const oldDefault = liveries[config.livery].name;
-      config.livery = Number(button.dataset.livery);
-      input.placeholder = liveries[config.livery].name;
-      if (!config.name.trim() || config.name === oldDefault) {
-        config.name = liveries[config.livery].name;
-        input.value = config.name;
-      }
+    panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
+      const input = row.querySelector('input')!;
+      const select = row.querySelector('select')!;
+      const entry = config.entries[slot];
+      input.addEventListener('input', () => { entry.name = input.value; syncSetup(); });
+      select.addEventListener('change', () => {
+        const next = Number(select.value);
+        const other = config.entries.find(candidate => candidate.livery === next);
+        if (other) other.livery = entry.livery;
+        entry.livery = next;
+        syncSetup();
+      });
+    });
+    const marker = element<HTMLSelectElement>('.marker-setting select');
+    marker.addEventListener('change', () => {
+      config.marker = marker.value === 'none' ? null : Number(marker.value);
       syncSetup();
-    }));
-    input.addEventListener('input', () => { config.name = input.value; syncSetup(); });
+    });
     element<HTMLFormElement>('.setup-form').addEventListener('submit', (event) => { event.preventDefault(); start(); });
     syncSetup();
   }
@@ -273,7 +306,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     runningOrder.innerHTML = ordered.map((entry, index) => {
       const racer = racers.find((r) => r.id === entry.id);
       if (!racer) return '';
-      return '<li><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (entry.finishTime != null ? icon('flag') : racer.isPlayer ? '<small>You</small>' : '') + '</li>';
+      return '<li><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (entry.finishTime != null ? icon('flag') : racer.marked ? '<small>Marked</small>' : '') + '</li>';
     }).join('');
   }
 
@@ -324,7 +357,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       <div class="table-key"><span>Finish order</span><span>Time / gap</span><span>Wins</span></div>
       <ol class="finish-order">${result.map((racer, index) => {
         const wins = counts.find((entry) => identityKey(entry) === identityKey(racer))?.wins ?? 0;
-        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.isPlayer ? '<small>You</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + wins + '</strong></li>';
+        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.marked ? '<small>Marked</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + wins + '</strong></li>';
       }).join('')}</ol>${resultActions()}</div>`;
     status.textContent = winner.name + ' wins in ' + clock(winner.time);
     bindResultsActions();
