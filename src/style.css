@@ -70,6 +70,10 @@ legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 [data-course=orrery] .track-stripes { background: linear-gradient(90deg,#354969 0 33%,#d8aa55 33% 66%,#858bc1 66%); }
 [data-course=tideglass] .track-stripes { background: linear-gradient(90deg,#38988c 0 33%,#b0e1ce 33% 66%,#af754b 66%); }
 [data-course=kepler] .track-stripes { background: linear-gradient(90deg,#5765aa 0 33%,#eea25d 33% 66%,#55dcd8 66%); }
+[data-course=crux] .track-stripes { background: linear-gradient(90deg,#40444a 0 33%,#e9b82a 33% 66%,#d65039 66%); }
+.format-choices { display: flex; gap: 6px; margin-top: 10px; }
+.format-choices button { flex: 1; padding: 8px; border: 1px solid #c6cbbd; border-radius: 4px; background: #fffdf6; font-weight: 600; }
+.format-choices button[aria-pressed=true] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .result-course { color: var(--muted); margin-bottom: 6px; font: 600 15px/1.2 var(--sans); }
 .count-choices { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 5px; margin-top: 12px; }
 .count-choices button { min-height: 47px; display: flex; align-items: baseline; justify-content: center; gap: 4px; padding: 7px 2px; border: 1px solid #c6cbbd; border-radius: 4px; background: transparent; }
@@ -119,6 +123,15 @@ body:is([data-view=race],[data-view=countdown]) .top-button { color: var(--paper
 .running-order b { color: #c4ccbe; font: 600 16px/1 var(--display); }
 .running-order svg { width: 13px; height: 13px; color: #dce8d7; }
 .running-order small { color: #c5cfbf; }
+.order-badges { display: inline-flex; align-items: center; gap: 4px; }
+.running-order .cut-row { color: #bdc6bc; }
+.running-order .cut-badge { color: #ffc499; }
+.checkpoint-status { padding: 7px 10px; border-top: 1px solid #ffffff30; background: #273733; color: #ffdd86; font: 600 13px/1.2 var(--sans); overflow-wrap: anywhere; }
+.checkpoint-results { margin-top: 12px; font-size: 14px; }
+.checkpoint-results summary { cursor: pointer; font-weight: 600; }
+.checkpoint-results ol { padding: 6px 0 0; }
+.checkpoint-results li { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 10px; padding: 5px 0; }
+.checkpoint-results li b, .checkpoint-results li time { font: 500 11px/1.4 var(--mono); }
 .countdown-overlay { position: fixed; inset: 0; display: grid; place-items: center; }
 .countdown-value { display: grid; place-items: center; width: clamp(72px, 10vw, 112px); aspect-ratio: 1; border-radius: 50%; background: #172722ed; color: #fff9e9; border: 3px solid #fffdf0; font: italic 800 clamp(54px,7vw,82px)/1 var(--display); box-shadow: 0 4px 26px #101d1c24; }
 .winner-card { display: flex; gap: 17px; align-items: center; padding: 24px 0; }

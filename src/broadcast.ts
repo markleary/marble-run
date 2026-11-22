@@ -46,6 +46,16 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [1.6, 3.8, 9], trackRelative: true },
     { offset: [4, 6, 9], trackRelative: true },
   ],
+  crux: [
+    { offset: [4, 5.4, 8.6] }, { offset: [-4, 4.4, 8.4] },
+    { offset: [-2.5, 5.8, 7.3], trackRelative: true },
+    { offset: [5.8, 5.7, -8.8], portraitOffset: [6.8, 6.5, -5.4], trackRelative: true },
+    { offset: [4, 8.1, -7.4], trackRelative: true },
+    { offset: [-7.1, 4.2, 7.5] }, { offset: [-3, 6.7, 7.8], trackRelative: true },
+    { offset: [-3.8, 6.1, 9.3] }, { offset: [-1.5, 8.7, -7.2], trackRelative: true },
+    { offset: [-5, 5.4, 8.4] }, { offset: [3.2, 4.7, 8.1], trackRelative: true },
+    { offset: [-4.5, 5.1, 8.2] },
+  ],
   tideglass: [
     { offset: [4, 6, 9] }, { offset: [2, 8, 10] },
     { offset: [6, 11, -9], trackRelative: true }, { offset: [4.5, 11, 8] },
@@ -74,6 +84,7 @@ const settings: Record<CourseId, { sky: string; fog: string; haze: number; previ
   timber: { sky: '#edd5b3', fog: '#e6d4bd', haze: 0.005, preview: [0.9, 0.95, 1.2] },
   wireworks: { sky: '#b4cbd0', fog: '#c4d0cc', haze: 0.004, preview: [0.9, 1.02, 1.22] },
   orrery: { sky: '#17283c', fog: '#293c55', haze: 0.003, preview: [0.52, 1.05, 1.27], finishApproach: 2.8 },
+  crux: { sky: '#d0d9d6', fog: '#cad4d0', haze: 0.00165, preview: [0.49, 1.06, 1.44] },
   tideglass: { sky: '#cbe1d3', fog: '#d1e2d8', haze: 0.0042, preview: [0.48, 1.28, 1.45] },
   kepler: { sky: '#070b18', fog: '#18203c', haze: 0.0014, preview: [-0.53, 0.85, 1.38] },
 };
@@ -187,8 +198,6 @@ export class RaceBroadcast {
     sun.position.set(-18, 38, -22);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 100 });
-    sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.normalBias = 0.026;
     sun.shadow.bias = -0.00032;
     this.scene.add(sun, sun.target);
@@ -212,6 +221,13 @@ export class RaceBroadcast {
     }
     this.track = track;
     const theme = settings[track.id];
+    // Reset the light when leaving the moving Kepler rig. The Crux terraces
+    // require both a wider shadow frustum and more distance to the light.
+    const extent = track.id === 'crux' ? 71 : 40;
+    this.sun.target.position.set(0, 0, 0);
+    this.sun.position.set(-18, 38, -22).multiplyScalar(track.id === 'crux' ? 2.15 : 1);
+    Object.assign(this.sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far: extent * 2.5 });
+    this.sun.shadow.camera.updateProjectionMatrix();
     if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose();
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.FogExp2(theme.fog, theme.haze);
@@ -223,9 +239,6 @@ export class RaceBroadcast {
       sky.mapping = THREE.EquirectangularReflectionMapping;
       sky.colorSpace = THREE.SRGBColorSpace;
       this.scene.background = sky;
-    } else {
-      this.sun.target.position.set(0, 0, 0);
-      this.sun.position.set(-18, 38, -22);
     }
     this.scenery = createCourseScenery(track, redraw);
     if (track.id === 'kepler') this.scenery.add(keplerStars(this.renderer.getPixelRatio()));
@@ -360,11 +373,13 @@ export class RaceBroadcast {
     this.scenery?.setRaceTime?.(displayTime);
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
+      mesh.visible = marble.cutAt === undefined;
+      if (!mesh.visible) continue;
       mesh.position.set(marble.previousPosition.x, marble.previousPosition.y, marble.previousPosition.z)
         .lerp(marble.position, alpha);
       mesh.quaternion.copy(marble.previousRotation).slerp(this.q.copy(marble.rotation), alpha);
     }
-    this.marker.visible = this.favorite >= 0 && (this.mode === 'race' || this.mode === 'grid');
+    this.marker.visible = this.favorite >= 0 && this.balls[this.favorite].visible && (this.mode === 'race' || this.mode === 'grid');
     if (this.balls[this.favorite]) {
       this.marker.position.copy(this.balls[this.favorite].position);
       this.marker.position.y += this.track.radius * 2.5;
@@ -387,11 +402,12 @@ export class RaceBroadcast {
       this.sun.target.position.copy(this.focus);
       this.sun.position.set(this.focus.x - 18, this.focus.y + 38, this.focus.z - 22);
     }
+    this.scenery?.frameCamera?.(this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 
   private racingShot(marbles: MarbleState[], elapsed: number) {
-    const running = marbles.filter(marble => marble.finishTime === null).sort((a, b) => b.distance - a.distance);
+    const running = marbles.filter(marble => marble.finishTime === null && marble.cutAt === undefined).sort((a, b) => b.distance - a.distance);
     if (!running.length) return;
     const lead = running[0].distance;
     const pack = running.filter(m => lead - m.distance < 9);

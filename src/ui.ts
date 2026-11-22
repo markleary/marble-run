@@ -8,6 +8,8 @@ import '@fontsource/ibm-plex-mono/latin-500.css';
 import './style.css';
 import { courseIds, courses, fieldSizes } from './courses/catalog';
 import type { CourseId } from './courses/catalog';
+import type { CruxFormat } from './courses/cruxCheckpoints';
+import type { RaceCheckpoint } from './cruxCompetition';
 import { Standings, finishPoints, normalizedName } from './standings';
 
 export interface Racer {
@@ -21,10 +23,11 @@ export interface Racer {
 export interface RaceRow {
   id: string;
   finishTime?: number | null;
+  cutAt?: number;
 }
 
 export interface UIActions {
-  onStart: (racers: Racer[]) => void;
+  onStart: (racers: Racer[], format: CruxFormat) => void;
   onSetup: () => void;
   onSound: (enabled: boolean) => void;
   onPreview: (racers: Racer[], course: CourseId) => void;
@@ -104,7 +107,7 @@ function writeSetting(key: string, value: string) {
 const setupKey = 'marble-run:setup:v2';
 const soundKey = 'marble-run:sound:v1';
 interface Entry { name: string; livery: number }
-interface Setup { course: CourseId; count: number; entries: Entry[]; marker: number | null }
+interface Setup { course: CourseId; format: CruxFormat; count: number; entries: Entry[]; marker: number | null }
 
 function readSetup(): Setup {
   function read(key: string) {
@@ -124,6 +127,7 @@ function readSetup(): Setup {
   });
   return {
     course: courseIds.includes(saved?.course) ? saved.course : 'prism',
+    format: saved?.format === 'endurance' ? 'endurance' : 'knockout',
     count: fieldSizes.includes(saved?.count) ? saved.count : 4,
     entries,
     marker: hasRoster && saved.marker === null ? null : Number.isInteger(saved?.marker) && entries[saved.marker] ? saved.marker : 0,
@@ -170,6 +174,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     <section class="race-hud" aria-label="Live standings" hidden>
       <div class="hud-title"><span class="on-air"><i></i> Racing</span><time class="race-clock">0:00.00</time></div>
       <ol class="running-order"></ol>
+      <div class="checkpoint-status" role="status" hidden></div>
     </section>
     <div class="countdown-overlay" role="status" aria-live="assertive" hidden><span class="countdown-value"></span></div>
     <div class="sr-only status-announcement" role="status"></div>
@@ -184,6 +189,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   const hud = element<HTMLElement>('.race-hud');
   const runningOrder = element<HTMLOListElement>('.running-order');
   const time = element<HTMLElement>('.race-clock');
+  const checkpointStatus = element<HTMLElement>('.checkpoint-status');
   const countdown = element<HTMLElement>('.countdown-overlay');
   const countdownValue = element<HTMLElement>('.countdown-value');
   const soundButton = element<HTMLButtonElement>('.sound-button');
@@ -245,6 +251,18 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   function syncSetup() {
     writeSetting(setupKey, JSON.stringify(config));
     const field = previewRacers();
+    const format = element<HTMLFieldSetElement>('.crux-format');
+    format.hidden = config.course !== 'crux';
+    if (!format.hidden) {
+      format.querySelectorAll<HTMLButtonElement>('[data-format]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.format === config.format));
+      });
+      const cutCount = config.count - 2;
+      const rule = config.format === 'endurance' ? 'Race all four checkpoints to the finish.'
+        : cutCount === 0 ? 'Both finalists race through all four checkpoints.'
+        : 'Last across ' + (cutCount === 4 ? 'each checkpoint' : cutCount === 1 ? 'the final checkpoint' : 'each of the last ' + cutCount + ' checkpoints') + ' is out. Two race to the finish.';
+      format.querySelector('p')!.textContent = rule;
+    }
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
     panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
       row.hidden = slot >= config.count;
@@ -268,7 +286,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     lastClock = '';
     status.textContent = '';
     if (dialog.open) dialog.close();
-    actions.onStart(racers.map((racer) => ({ ...racer })));
+    actions.onStart(racers.map((racer) => ({ ...racer })), config.format);
   }
 
   function showSetup() {
@@ -277,11 +295,15 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       <form class="setup-form">
         <div class="panel-title"><h1>Race setup</h1><span class="checker" aria-hidden="true"></span></div>
         <fieldset class="track-picker"><legend>Track</legend><div class="track-options">
-          ${courseIds.map(id => `<button type="button" data-course="${id}"><span aria-hidden="true" class="track-stripes"></span>${courses[id].title}</button>`).join('')}
+          ${courseIds.map(id => `<button type="button" data-course="${id}"${id === 'crux' ? ' aria-description="Race time over two minutes"' : ''}><span aria-hidden="true" class="track-stripes"></span>${courses[id].title}</button>`).join('')}
         </div></fieldset>
         <fieldset class="field-size"><legend>Marbles</legend><div class="count-choices" aria-label="Number of marbles">
           ${fieldSizes.map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b></button>').join('')}
         </div></fieldset>
+        <fieldset class="crux-format" hidden><legend>Race format</legend><div class="format-choices">
+          <button type="button" data-format="knockout">Knockout</button>
+          <button type="button" data-format="endurance">Endurance</button>
+        </div><p class="swap-hint"></p></fieldset>
         <fieldset class="roster-editor"><legend>Starting field</legend>
           <ol class="entrant-list">${config.entries.map((entry, slot) => `
             <li class="entrant-row">
@@ -302,6 +324,10 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       button.addEventListener('click', () => selectCourse(button.dataset.course as CourseId));
     });
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.addEventListener('click', () => { config.count = Number(button.dataset.count); syncSetup(); }));
+    panel.querySelectorAll<HTMLButtonElement>('[data-format]').forEach(button => button.addEventListener('click', () => {
+      config.format = button.dataset.format as CruxFormat;
+      syncSetup();
+    }));
     panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
       const input = row.querySelector('input')!;
       const select = row.querySelector('select')!;
@@ -324,16 +350,32 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     selectCourse(config.course);
   }
 
-  function updateRace(seconds: number, ordered: RaceRow[]) {
+  function updateCheckpoint(seconds: number, gates?: readonly RaceCheckpoint[]) {
+    checkpointStatus.hidden = !gates;
+    if (!gates) return;
+    const pending = gates.find(gate => gate.arrivals.length < gate.field);
+    let message = pending ? pending.name + ' · ' + (pending.cut ? 'Last racer out' : 'Timing split') : 'Final stretch';
+    for (const gate of gates) {
+      const leader = gate.arrivals[0];
+      if (leader && seconds - leader.time < 3) message = gate.name + ' · ' + racers[leader.id].name + ' leads';
+      const last = gate.arrivals[gate.field - 1];
+      if (gate.cut && last && seconds - last.time < 5) message = gate.name + ' · ' + racers[last.id].name + ' out';
+    }
+    if (checkpointStatus.textContent !== message) checkpointStatus.textContent = message;
+  }
+
+  function updateRace(seconds: number, ordered: RaceRow[], gates?: readonly RaceCheckpoint[]) {
+    updateCheckpoint(seconds, gates);
     const formatted = clock(seconds);
     if (lastClock !== formatted) { time.textContent = formatted; lastClock = formatted; }
-    const order = ordered.map((entry) => entry.id + '/' + (entry.finishTime ?? '')).join('|');
+    const order = ordered.map((entry) => entry.id + '/' + (entry.finishTime ?? '') + '/' + (entry.cutAt ?? '')).join('|');
     if (order === lastOrder) return;
     lastOrder = order;
     runningOrder.innerHTML = ordered.map((entry, index) => {
       const racer = racers.find((r) => r.id === entry.id);
       if (!racer) return '';
-      return '<li><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (entry.finishTime != null ? icon('flag') : racer.marked ? '<small>Marked</small>' : '') + '</li>';
+      const badge = entry.cutAt ? '<small class="cut-badge">Out</small>' : entry.finishTime != null ? icon('flag') : '';
+      return '<li' + (entry.cutAt ? ' class="cut-row"' : '') + '><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span><span class="order-badges">' + (racer.marked ? '<small>Marked</small>' : '') + badge + '</span></li>';
     }).join('');
   }
 
@@ -362,24 +404,34 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     return '<div class="panel-bottom"><button class="primary-button rematch-button">' + icon('replay') + '<span>Race again</span>' + icon('arrow') + '</button><button class="secondary-button setup-button">Change setup</button></div>';
   }
 
-  function showResults(ordered: RaceRow[]) {
+  function showResults(ordered: RaceRow[], gates?: readonly RaceCheckpoint[]) {
     const result = ordered.flatMap((row) => {
       const racer = racers.find((item) => item.id === row.id);
-      return racer && row.finishTime != null ? [{ ...racer, time: row.finishTime }] : [];
+      return racer && (row.finishTime != null || row.cutAt) ? [{ ...racer, time: row.finishTime, cutAt: row.cutAt }] : [];
     });
     if (!raceId || result.length !== racers.length || !result.length) return;
     const winner = result[0];
+    if (winner.time == null) return;
+    const winTime = winner.time;
     standings.record(raceId, result);
     setView('results');
     panel.innerHTML = `
       <div class="results-content"><div class="panel-title"><div><div class="result-course">${courses[config.course].title}</div><h1>Race results</h1></div><span class="checker" aria-hidden="true"></span></div>
       <div class="winner-card" style="--livery:${winner.color}"><div class="winner-marble" aria-hidden="true"><i></i></div><div><span class="small-label">Winner</span><h2>${escapeText(winner.name)}</h2><p>${clock(winner.time)}</p></div></div>
-      <div class="table-key"><span>Finish order</span><span>Time / gap</span><span>Points</span></div>
+      <div class="table-key"><span>${gates ? 'Race order' : 'Finish order'}</span><span>${gates?.some(gate => gate.cut) ? 'Finish / cut' : 'Time / gap'}</span><span>Points</span></div>
       <ol class="finish-order">${result.map((racer, index) => {
-        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.marked ? '<small>Marked</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + finishPoints(index) + '</strong></li>';
-      }).join('')}</ol>${resultActions()}</div>`;
+        const timing = racer.cutAt ? 'Out at CP ' + racer.cutAt : clock(racer.time!) + (index ? '<small>+' + (racer.time! - winTime).toFixed(2) + 's</small>' : '');
+        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.marked ? '<small>Marked</small>' : '') + '</span></div><div class="finish-time">' + timing + '</div><strong>' + finishPoints(index) + '</strong></li>';
+      }).join('')}</ol>${gates ? checkpointResults(gates) : ''}${resultActions()}</div>`;
     status.textContent = winner.name + ' wins in ' + clock(winner.time);
     bindResultsActions();
+  }
+
+  function checkpointResults(gates: readonly RaceCheckpoint[]) {
+    return '<details class="checkpoint-results"><summary>Checkpoint leaders</summary><ol>' + gates.map(gate => {
+      const first = gate.arrivals[0];
+      return '<li><b>' + gate.name + '</b><span>' + escapeText(racers[first.id].name) + '</span><time>' + clock(first.time) + '</time></li>';
+    }).join('') + '</ol></details>';
   }
 
   function showFailure(message: string) {

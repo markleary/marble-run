@@ -87,7 +87,7 @@ async function landmarkTimes(id, seed, sections) {
     marks.push(['Airborne', (takeoff + landing) / 2]);
   }
   marks.sort((a, b) => a[1] - b[1]);
-  const heat = new RaceSimulation(track, 6, seed);
+  const heat = new RaceSimulation(track, 6, seed, id === 'crux' ? 'knockout' : 'endurance');
   const times = {};
   try {
     heat.release();
@@ -125,9 +125,9 @@ async function assertSetup(size) {
 }
 
 async function verifyResults(track, count, marked) {
-  await page.waitForSelector('body[data-view="results"], body[data-view="failure"]', { timeout: 150000, state: 'attached' });
+  await page.waitForSelector('body[data-view="results"], body[data-view="failure"]', { timeout: track === 'Crux Mountain Masters' ? 300000 : 150000, state: 'attached' });
   const failure = await page.locator('.failure-message').allTextContents();
-  assert.deepEqual(failure, [], track + ' heat failed: ' + failure.join(' '));
+  if (failure.length) assert.fail(track + ' heat failed at seed ' + await page.evaluate(() => window.playtestGridSeed) + ': ' + failure.join(' '));
   assert.equal(await page.locator('.result-course').innerText(), track);
   if (track === 'Kepler Relay') {
     assert.ok(await page.locator('.winner-card p').innerText() >= '1:00.00', 'Kepler Relay winner must race for at least a minute.');
@@ -146,7 +146,7 @@ async function verifyResults(track, count, marked) {
     if (index === 0) score.wins++;
     expectedScores.set(result.name, score);
   });
-  console.log('Verified', track, 'with', count, 'finishers');
+  console.log('Verified', track, 'with', count, 'classified racers');
 }
 
 async function assertMarked(list, slot) {
@@ -157,6 +157,19 @@ async function assertMarked(list, slot) {
 try {
   await mkdir(output, { recursive: true });
   await page.addInitScript(() => {
+    // Keep random rematches reproducible if a browser finds a physics failure.
+    const randomValues = crypto.getRandomValues.bind(crypto);
+    crypto.getRandomValues = array => {
+      const values = randomValues(array);
+      if (array instanceof Uint32Array && array.length === 1) {
+        if (window.playtestNextSeed !== undefined) {
+          array[0] = window.playtestNextSeed;
+          delete window.playtestNextSeed;
+        }
+        window.playtestGridSeed = array[0];
+      }
+      return values;
+    };
     // Music is the only looping buffer longer than the four-second rolling sounds.
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args) {
@@ -304,10 +317,11 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  const seeds = { orrery: 82, tideglass: 58, kepler: 23 };
+  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
   const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
+  const crux = await landmarkTimes('crux', seeds.crux, ['Volume Alley', 'Slab Switches']);
   const jumpShots = {};
   for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne]]) {
     jumpShots[id] = { approach: clock(time - 1), target: clock(time - .04) };
@@ -331,6 +345,10 @@ try {
       [clock(kepler['Aurora Catch']), 'aurora-catch'],
       [clock(kepler['Orbital Return']), 'orbital-return'],
     ]],
+    ['Crux Mountain Masters', 'crux', [
+      [clock(crux['Volume Alley']), 'volume-alley'],
+      [clock(crux['Slab Switches']), 'slab-switches'],
+    ]],
   ]) {
     await trackButton(title).click();
     await fieldButton(6).click();
@@ -346,15 +364,7 @@ try {
     if (id in seeds) {
       // Apply the rehearsed grid once. The rematch still draws a random grid.
       await page.evaluate(({ seed, shot }) => {
-        const randomValues = crypto.getRandomValues.bind(crypto);
-        crypto.getRandomValues = array => {
-          if (array instanceof Uint32Array && array.length === 1) {
-            delete crypto.getRandomValues;
-            array[0] = seed;
-            return array;
-          }
-          return randomValues(array);
-        };
+        window.playtestNextSeed = seed;
         window.playtestActionShot = shot;
       }, { seed: seeds[id], shot: jumpShots[id] });
     }
@@ -369,18 +379,35 @@ try {
       }
       await capture(id + '-' + shot);
       if (time === jumpShots[id]?.target) await page.evaluate(() => { delete window.playtestActionShot; });
+      if (id === 'crux') assert.ok(await page.locator('.checkpoint-status').isVisible());
     }
     await assertRacers('.running-order', entrants);
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
     assert.ok(await page.evaluate(() => window.playtestMusicStarted), title + ' must play a decoded music loop.');
     await verifyResults(title, 6, 5);
+    if (id === 'crux') {
+      assert.deepEqual(await page.locator('.finish-time').allTextContents().then(times => times.slice(2)),
+        ['Out at CP 4', 'Out at CP 3', 'Out at CP 2', 'Out at CP 1']);
+      assert.ok((await page.locator('.winner-card p').innerText()) >= '2:00.00');
+      await page.getByText('Checkpoint leaders', { exact: true }).click();
+      assert.equal(await page.locator('.checkpoint-results li:visible').count(), 4);
+    }
     await capture(id + '-results');
     await page.getByRole('button', { name: 'Race again' }).click();
     await verifyResults(title, 6, 5);
     await page.getByRole('button', { name: 'Change setup' }).click();
+    if (id === 'crux') {
+      await page.getByRole('button', { name: 'Endurance', exact: true }).click();
+      await page.reload();
+      assert.equal(await page.getByRole('button', { name: 'Endurance', exact: true }).getAttribute('aria-pressed'), 'true');
+      await startButton.click();
+      await verifyResults(title, 6, 5);
+      assert.ok((await page.locator('.finish-time').allTextContents()).every(time => /^\d+:\d\d\.\d\d/.test(time)));
+      await page.getByRole('button', { name: 'Change setup' }).click();
+    }
   }
-  assert.equal(await tally(), 13);
-  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'kepler', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
+  assert.equal(await tally(), 16);
+  assert.deepEqual([...loadedMusic].sort(), ['crux', 'frostline', 'kepler', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -395,7 +422,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed seven courses, seven soundtrack requests, named entrants, restart, thirteen timed heats and cumulative podium scoring:', game);
+  console.log('Passed eight courses, eight soundtracks, named entrants, restart, sixteen timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

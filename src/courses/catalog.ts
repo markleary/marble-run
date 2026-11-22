@@ -27,8 +27,12 @@ export const courses = {
     title: 'Kepler Relay',
     features: ['Gravity dive', 'Vacuum transfer', 'Aurora glass flume'],
   },
+  crux: {
+    title: 'Crux Mountain Masters',
+    features: ['2+ min', 'Climbing volumes', 'Counter-banked slabs', 'Knockout gates'],
+  },
 } as const;
 
 export type CourseId = keyof typeof courses;
-export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass', 'kepler'];
+export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass', 'kepler', 'crux'];
 export const fieldSizes = [2, 3, 4, 5, 6];
