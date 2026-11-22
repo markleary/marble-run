@@ -41,7 +41,7 @@ The wider grid keeps the original sequence of rollers, opposing banks and timber
 
 **Geometry and materials.** Six terraced starting chutes feed the Glacier Esses. Ice and wood use separate contact materials on a continuous downhill profile. Ten rounded deflectors form staggered rows in Snowcap Slalom. Opaque blue ice, dark rail edges and a red truss bridge distinguish the racing line from the snow. The clock tower, chalets and pines sit outside the channel.
 
-**Progress and cameras.** Use an elevated three-quarter shot for the S-bend, a high fixed view showing the paths through the deflectors and a side view at the bridge. Track downhill progress through the wide deflector field without awarding places to marbles that bounce sideways across adjacent rows. Use dark trim at the track edges for contrast against snow.
+**Progress and cameras.** An elevated three-quarter shot follows the S-bend. A fixed camera frames the slalom across the track in landscape and along its length in portrait. A side view covers the bridge. Track downhill progress through the wide deflector field without awarding places to marbles that bounce sideways across adjacent rows. Use dark trim at the track edges for contrast against snow.
 
 **Acceptance.** The 500 seeded release heats finished in 38–63 seconds, including 100 six-player heats in 41–60 seconds. Verify a marble starting almost at rest can clear each transition. Test two-marble pinches at deflectors and a full six-marble pack at the skating turn. Compare speeds exiting the ice and wood sections. Check pale marble visibility, shadow cost and timing-stripe readability on a phone viewport.
 

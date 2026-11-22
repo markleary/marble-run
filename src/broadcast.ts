@@ -7,7 +7,7 @@ import type { CourseId } from './courses/catalog';
 import { createCourseScenery } from './scenery';
 
 type Offset = [number, number, number];
-interface Shot { offset: Offset; anchor?: number; fixed?: boolean }
+interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean }
 const shots: Record<CourseId, Shot[]> = {
   prism: [
     { offset: [4.5, 4.2, -7.8] }, { offset: [4.5, 4.2, -7.8] },
@@ -16,7 +16,7 @@ const shots: Record<CourseId, Shot[]> = {
   ],
   frostline: [
     { offset: [3.2, 5.8, -9.4] }, { offset: [2, 10, -10.5], anchor: 0.12 },
-    { offset: [8, 5.3, -6.4] }, { offset: [13, 20, 2], fixed: true },
+    { offset: [8, 5.3, -6.4] }, { offset: [13, 20, 2], portraitOffset: [0.4, 20, -8], fixed: true },
     { offset: [7.6, 7.3, 9.3], anchor: 0.12 }, { offset: [-3.4, 5.8, 9.6] },
   ],
 };
@@ -327,12 +327,12 @@ export class RaceBroadcast {
       const shot = shots[this.track.id][Math.max(0, this.shot)];
       if (shot.fixed) this.focusGoal.copy(this.sectionAnchors[this.shot]);
       else if (shot.anchor) this.focusGoal.lerp(this.sectionAnchors[this.shot], shot.anchor);
-      offset = shot.offset;
+      offset = this.camera.aspect < 0.8 && shot.portraitOffset ? shot.portraitOffset : shot.offset;
     }
     this.sightLine.set(...offset);
     const fixedFrame = this.fixedFrames[this.shot];
     const fixed = fixedFrame?.length > 0;
-    const zoom = Math.max(1, 1.18 / this.camera.aspect) * (fixed ? 1 : 1 + spread * 0.043);
+    const zoom = fixed ? 1 : Math.max(1, 1.18 / this.camera.aspect) * (1 + spread * 0.043);
     const baseDistance = this.sightLine.length() * zoom;
     this.sightLine.normalize();
     this.cameraRight.crossVectors(this.camera.up, this.sightLine).normalize();
