@@ -64,13 +64,14 @@
     }
   ],
   "curveRadius": 6.3,
+  "roundedLaneDepth": 0.28,
   "rollerPitch": 7.750758610293269,
   "launchTrims": [
     0.3,
-    0.07,
+    0.14,
     -0.04,
-    -0.03,
-    -0.02,
+    0,
+    0.06,
     0.19
   ],
   "banks": {

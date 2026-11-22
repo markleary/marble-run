@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import type { CourseTrack, TrackSample } from './track'
+import { roundedLaneBands } from './courseGeometry'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
 import { createFrostlineScenery } from './frostlineScenery'
 import { createTimberScenery } from './timberScenery'
@@ -45,8 +46,8 @@ function createPrismScenery(track: CourseTrack): THREE.Group {
   const w = track.halfWidth
   const bottom = -0.34
   const sample = (s: number, l: number, dy: number) => lifted(track.sample(s, l), dy)
-  const ribbon = (mat: Material, s0: number, s1: number, left: number, right: number, height = 0) =>
-    batch.strip(mat, s0, s1, (s, k) => sample(s, k ? right : left, height), right - left)
+  const ribbon = (mat: Material, s0: number, s1: number, left: number, right: number, height = 0, bands = 1) =>
+    batch.surface(mat, s0, s1, (s, t) => sample(s, left + t * (right - left), height), right - left, bands)
   const deckEdge = (mat: Material, lateral: number, y0: number, y1: number) =>
     batch.strip(mat, 0, track.length, (s, k) => sample(s, lateral, k ? y1 : y0), Math.abs(y1 - y0))
   const outside = (p: TrackSample, dist: number, up = 0) => new THREE.Vector3(p.x + p.rx * dist, p.y + up, p.z + p.rz * dist)
@@ -71,34 +72,24 @@ function createPrismScenery(track: CourseTrack): THREE.Group {
   for (let lane = 0; lane < track.laneCount; lane++) {
     const left = -w + lane * track.laneWidth
     batch.surface(colorLanes[lane], 0, timber, (s, t) =>
-      track.sample(s, left + t * track.laneWidth), track.laneWidth, 10)
+      track.sample(s, left + t * track.laneWidth), track.laneWidth, roundedLaneBands)
   }
   for (let plank = 0; plank < 12; plank++) {
     const left = -w + 2 * w * plank / 12
     const right = -w + 2 * w * (plank + 1) / 12
-    ribbon(wood[plank % wood.length], timber, track.length, left, right)
+    ribbon(wood[plank % wood.length], timber, track.length, left, right, 0, roundedLaneBands / 2)
     if (plank > 0) ribbon(darkPly, timber, track.length, left - .004, left + .004, .014)
     // Staggered plank ends give the open deck a visible scale at speed.
     for (let s = timber + 2 + (plank % 3) * 2.1; s < track.length - .3; s += 7.8) {
-      ribbon(darkPly, s, s + .014, left, right, .016)
+      ribbon(darkPly, s, s + .014, left, right, .016, roundedLaneBands / 2)
     }
   }
 
-  // The dividing fins taper into the timber during the merge.
+  // Paint the crest of each molded lane guide as it tapers into the timber.
   for (let lane = 1; lane < track.laneCount; lane++) {
     const lateral = -w + lane * track.laneWidth
-    const until = track.sections[4].end
-    for (const dir of [-1, 1]) {
-      batch.strip(enamel, 0, until, (s, k) => {
-        const factor = track.divider(s)
-        return k ? sample(s, lateral + dir * .024 * factor, .205 * factor + .006)
-          : sample(s, lateral + dir * .047 * factor, .005)
-      }, .2)
-    }
-    batch.strip(enamel, 0, until, (s, k) => {
-      const d = track.divider(s)
-      return sample(s, lateral + (k ? .025 : -.025) * d, d * .205 + .007)
-    }, .05)
+    batch.surface(enamel, 0, track.sections[4].end, (s, t) =>
+      sample(s, lateral + (t - .5) * .07 * track.divider(s), .022), .07, 2)
   }
   // Steel sill, layered plywood fascia, low side guard and its dark rolled rim.
   for (const sign of [-1, 1]) {
@@ -132,7 +123,7 @@ function createPrismScenery(track: CourseTrack): THREE.Group {
   // Lacquered swatches inset into the wood mark the material transition.
   for (let lane = 0; lane < track.laneCount; lane++) {
     const center = -w + (lane + .5) * track.laneWidth
-    ribbon(edgeColors[lane], timber + .035, timber + .20, center - .53, center + .53, .018)
+    ribbon(edgeColors[lane], timber + .035, timber + .20, center - .53, center + .53, .018, 8)
   }
 
   // Trestles use pairs of steel uprights with footplates, shoulder beams and diagonal stays.

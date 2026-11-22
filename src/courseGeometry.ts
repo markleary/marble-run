@@ -50,12 +50,15 @@ export interface Layout {
 interface SurfaceSpan { start: number; end: number; surface: CourseSurface }
 export interface Profile {
   layered?: boolean
+  /** Mold the lane guides into the running surface instead of adding upright fins. */
+  roundedLaneDepth?: number
   wallHeight?(s: number): number
   height(s: number, lateral: number): number
   divider(s: number): number
   spans: SurfaceSpan[]
   deflectors: Deflector[]
 }
+export const roundedLaneBands = 10
 export const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(value, high))
 export const ease = (a: number, b: number, value: number) => {
   const t = clamp((value - a) / (b - a), 0, 1)
@@ -100,13 +103,14 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
   }
   const profile = makeProfile(pieces)
   const { divider, spans } = profile
+  const laneDepth = profile.roundedLaneDepth ?? 0.10
   const wallHeight = profile.wallHeight ?? ((s: number) => (id === 'prism' ? 0.73 : 0.88) + 0.12 * ease(finishS + 0.4, length, s))
   const sample = (distance: number, lateral = 0): TrackSample => {
     const s = clamp(distance, 0, length)
     const piece = pieces.find(part => s <= part.end) ?? pieces[pieces.length - 1]
     const point = position(piece, s - piece.start)
     const rx = -point.tz, rz = point.tx
-    const groove = 0.05 * (1 + Math.cos(2 * Math.PI * (lateral + halfWidth) / laneWidth))
+    const groove = laneDepth * 0.5 * (1 + Math.cos(2 * Math.PI * (lateral + halfWidth) / laneWidth))
     const y = profile.height(s, lateral) + divider(s) * groove + 0.038 * Math.abs(lateral / halfWidth) ** 5
     return { x: point.x + lateral * rx, y, z: point.z + lateral * rz, tx: point.tx, tz: point.tz, rx, rz }
   }
@@ -145,11 +149,17 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
   const cross: { lateral: number; lift: 'wall' | 'divider' | 0 }[] = [
     { lateral: -halfWidth, lift: 'wall' }, { lateral: -halfWidth, lift: 0 },
   ]
-  for (let lane = 0; lane < laneCount; lane++) {
-    const left = -halfWidth + lane * laneWidth
-    for (const fraction of [0.12, 0.25, 0.5, 0.75, 0.88]) cross.push({ lateral: left + fraction * laneWidth, lift: 0 })
-    const end = left + laneWidth
-    if (lane < laneCount - 1) cross.push({ lateral: end - 0.045, lift: 0 }, { lateral: end, lift: 'divider' }, { lateral: end + 0.045, lift: 0 })
+  if (profile.roundedLaneDepth !== undefined) {
+    for (let i = 1; i < laneCount * roundedLaneBands; i++) {
+      cross.push({ lateral: -halfWidth + (i / roundedLaneBands) * laneWidth, lift: 0 })
+    }
+  } else {
+    for (let lane = 0; lane < laneCount; lane++) {
+      const left = -halfWidth + lane * laneWidth
+      for (const fraction of [0.12, 0.25, 0.5, 0.75, 0.88]) cross.push({ lateral: left + fraction * laneWidth, lift: 0 })
+      const end = left + laneWidth
+      if (lane < laneCount - 1) cross.push({ lateral: end - 0.045, lift: 0 }, { lateral: end, lift: 'divider' }, { lateral: end + 0.045, lift: 0 })
+    }
   }
   cross.push({ lateral: halfWidth, lift: 0 }, { lateral: halfWidth, lift: 'wall' })
 

@@ -226,14 +226,8 @@
       ]
     }
   ],
-  "launchTrims": [
-    0.39,
-    0.2,
-    0.04,
-    0.64,
-    -0.29,
-    -0.32
-  ],
+  "gateHeightStagger": 0.63,
+  "outerBankRise": 0.65,
   "sections": [
     {
       "name": "Rivet Gate",

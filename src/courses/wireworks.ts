@@ -1,5 +1,5 @@
 import layout from './wireworks-layout.json'
-import { bankAt, buildCourse, clamp, ease, launchTrim } from '../courseGeometry'
+import { bankAt, buildCourse, clamp, ease } from '../courseGeometry'
 import type { CollisionMesh, CourseTrack, Profile, TrackSample } from '../courseGeometry'
 
 export type BranchSide = -1 | 1
@@ -66,7 +66,11 @@ export function buildWireworksTrack(): WireworksTrack {
     // The wire and the two sides of the fork have their own contact meshes.
     spans: [],
     height(s, l) {
-      const gate = launchTrim(l / halfWidth, layout.launchTrims) * (1 - ease(3, railEnd - 2, s))
+      // Each pair starts level across its two wires. The longer outside lines
+      // start higher, then shed their extra height before the first bend.
+      const lane = clamp(Math.floor((l + halfWidth) * layout.laneCount / (2 * halfWidth)), 0, layout.laneCount - 1)
+      const across = (lane + .5) * 2 / layout.laneCount - 1
+      const gate = -layout.gateHeightStagger * across * (1 - ease(0, layout.sections[0].end, s))
       const drop = .055 * s + .115 * clamp(s - (forkEnd - 7), 0, 13) + 1.55 * (1 - Math.exp(-s / 9)) + .32 * ease(8, 27, s)
       const bank = bankAt(s, pieces[1], -.12) + bankAt(s, pieces[5], -.15)
       return 10.8 - drop + l * bank + gate
@@ -80,6 +84,9 @@ export function buildWireworksTrack(): WireworksTrack {
     // Shift the whole deck, including both walls, away from the central tower.
     p.x += p.rx * shifted
     p.z += p.rz * shifted
+    // Bank the longer sweep toward the tower. The shoulder meets the shared
+    // decks level at both ends and stays flush with the splitter along t=0.
+    if (side === 1) p.y += layout.outerBankRise * t * Math.sin(Math.PI * station) ** 2
     return p
   }
   const forkSample = (s: number, side: BranchSide, t: number) =>

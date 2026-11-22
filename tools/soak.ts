@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { buildTrack } from '../src/track';
-import type { CourseTrack } from '../src/track';
+import type { CourseTrack, TrackSample } from '../src/track';
 import { courseIds } from '../src/courses/catalog';
 import timberLayout from '../src/courses/timber-layout.json';
 import wireworksLayout from '../src/courses/wireworks-layout.json';
 import { checkWireworksContacts } from './check-wireworks';
+import { checkPrismBanks } from './check-prism';
 import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
 import { initPhysics, RaceSimulation } from '../src/simulation';
+import type { MarbleState } from '../src/simulation';
 
 const repetitions = Number(process.argv[2] ?? 100);
 const firstSeed = Number(process.argv[3] ?? 1);
@@ -14,6 +16,25 @@ const courseFilter = process.argv[4];
 assert.ok(Number.isSafeInteger(repetitions) && repetitions > 0, 'Pass a positive number of heats per field size.');
 assert.ok(Number.isSafeInteger(firstSeed), 'Pass an integer starting seed.');
 assert.ok(!courseFilter || courseIds.some(id => id === courseFilter), 'Specify one of ' + courseIds.join(', ') + '.');
+
+function firstBranchAcrossExit(exit: TrackSample, marbles: MarbleState[], branches: Map<number, number>) {
+  let firstFraction = Infinity;
+  let leader: number | undefined;
+  for (const marble of marbles) {
+    const branch = branches.get(marble.id);
+    if (branch === undefined) continue;
+    const from = (marble.previousPosition.x - exit.x) * exit.tx + (marble.previousPosition.z - exit.z) * exit.tz;
+    const to = (marble.position.x - exit.x) * exit.tx + (marble.position.z - exit.z) * exit.tz;
+    if (from > 0 || to < 0 || to <= from) continue;
+    // Compare marble centers at the physical merge when multiple racers cross in one tick.
+    const fraction = -from / (to - from);
+    if (fraction < firstFraction) {
+      firstFraction = fraction;
+      leader = branch;
+    }
+  }
+  return leader;
+}
 
 function exerciseField(track: CourseTrack, count: number) {
   const wins = Array<number>(track.laneCount).fill(0);
@@ -24,6 +45,8 @@ function exerciseField(track: CourseTrack, count: number) {
     : sluice ? (sluice.start + sluice.end) / 2 : undefined;
   const branchCenter = branchMidpoint === undefined ? undefined : track.sample(branchMidpoint);
   const branchStarts = [0, 0], branchWins = [0, 0];
+  const forkExit = track.id === 'wireworks' ? track.sample(wireworksLayout.forkEnd) : undefined;
+  const mixed = { branches: ['slateLower', 'aquaUpper'], heats: 0, mergeLeads: [0, 0], wins: [0, 0] };
   let replayFinishTimes: (number | null)[] | undefined;
 
   for (let i = 0; i < repetitions; i++) {
@@ -39,6 +62,7 @@ function exerciseField(track: CourseTrack, count: number) {
       assert.equal(race.elapsed, 0, 'staging must not advance the clock');
       race.release();
       const branches = new Map<number, number>();
+      let mergeLeader: number | undefined;
       while (!race.finished && !race.failure) {
         race.step();
         if (branchCenter && branchMidpoint !== undefined && branches.size < count) {
@@ -50,6 +74,9 @@ function exerciseField(track: CourseTrack, count: number) {
             branches.set(marble.id, branch);
             branchStarts[branch]++;
           }
+        }
+        if (forkExit && mergeLeader === undefined) {
+          mergeLeader = firstBranchAcrossExit(forkExit, race.marbles, branches);
         }
       }
       if (race.failure) {
@@ -72,7 +99,16 @@ function exerciseField(track: CourseTrack, count: number) {
         wins[finishers[0].slot]++;
         if (branchCenter) {
           assert.equal(branches.size, count);
-          branchWins[branches.get(finishers[0].id)!]++;
+          const winnerBranch = branches.get(finishers[0].id)!;
+          branchWins[winnerBranch]++;
+          if (forkExit) {
+            assert.ok(mergeLeader !== undefined, 'A Wireworks finisher must first cross the fork exit.');
+            if (new Set(branches.values()).size === 2) {
+              mixed.heats++;
+              mixed.mergeLeads[mergeLeader]++;
+              mixed.wins[winnerBranch]++;
+            }
+          }
         }
         durations.push(finishers[count - 1].finishTime!);
       }
@@ -84,7 +120,15 @@ function exerciseField(track: CourseTrack, count: number) {
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
     ...(branchCenter && { branchStarts, branchWins }),
+    ...(forkExit && { mixedBranchHeats: mixed }),
   }));
+  if (forkExit && count === track.laneCount && repetitions >= 100) {
+    assert.ok(mixed.heats >= .80 * repetitions, 'Both Wireworks branches must be used in at least 80% of full-field heats.');
+    for (const [branch, name] of mixed.branches.entries()) {
+      assert.ok(mixed.mergeLeads[branch] >= .30 * mixed.heats, name + ' must lead at least 30% of contested merges.');
+      assert.ok(mixed.wins[branch] >= .30 * mixed.heats, name + ' must win at least 30% of contested heats.');
+    }
+  }
   if (replayFinishTimes) {
     const replay = new RaceSimulation(track, count, firstSeed);
     try {
@@ -133,6 +177,7 @@ for (const id of courseIds) {
   if (courseFilter && id !== courseFilter) continue;
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
+  if (id === 'prism') checkPrismBanks(track);
   if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass') checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);

@@ -16,7 +16,7 @@ function prismProfile(pieces: PathPiece[]): Profile {
   const divider = (s: number) => 1 - ease(pieces[3].end - 7, pieces[3].end + 4, s)
   const timber = sections[4].start + 1.8
   return {
-    divider, deflectors: [],
+    divider, roundedLaneDepth: prism.roundedLaneDepth, deflectors: [],
     spans: [{ start: 0, end: timber, surface: 'lacquer' }, { start: timber, end: sections[5].end, surface: 'wood' }],
     height(s, lateral) {
       const drop = 0.041 * s + 1.45 * (1 - Math.exp(-s / 8.5))
