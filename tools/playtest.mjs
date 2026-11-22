@@ -5,6 +5,7 @@ import { chromium, webkit } from 'playwright';
 import { preview } from 'vite';
 import { tsImport } from 'tsx/esm/api';
 import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
+import keplerLayout from '../src/courses/kepler-layout.json' with { type: 'json' };
 
 const url = process.env.MARBLE_URL;
 const server = url ? undefined : await preview({ preview: { host: '127.0.0.1', port: 0 } });
@@ -48,6 +49,16 @@ const nameInput = number => page.getByRole('textbox', { name: 'Player ' + number
 const colorInput = number => page.getByRole('combobox', { name: 'Player ' + number + ' color', exact: true });
 const fieldButton = size => page.getByRole('button', { name: size + ' marbles', exact: true });
 const marker = page.getByRole('combobox', { name: 'Race marker', exact: true });
+const enterFullscreen = page.getByRole('button', { name: 'Enter full screen', exact: true });
+const exitFullscreen = page.getByRole('button', { name: 'Exit full screen', exact: true });
+
+async function assertFullscreen(active) {
+  await page.waitForFunction(expected => {
+    const element = document.fullscreenElement ?? document.webkitFullscreenElement;
+    return expected ? element === document.documentElement : !element;
+  }, active);
+  await (active ? exitFullscreen : enterFullscreen).waitFor();
+}
 
 async function capture(name) {
   await page.screenshot({ path: resolve(output, name + '.png') });
@@ -70,8 +81,9 @@ async function landmarkTimes(id, seed, sections) {
     assert.ok(section, id + ' is missing the ' + name + ' camera section.');
     return [name, (section.start + section.end) / 2];
   });
-  if (id === 'orrery') {
-    const { takeoff, landing } = orreryLayout.jumps[0];
+  const jump = id === 'orrery' ? orreryLayout.jumps[0] : id === 'kepler' ? keplerLayout.jump : undefined;
+  if (jump) {
+    const { takeoff, landing } = jump;
     marks.push(['Airborne', (takeoff + landing) / 2]);
   }
   marks.sort((a, b) => a[1] - b[1]);
@@ -117,6 +129,9 @@ async function verifyResults(track, count, marked) {
   const failure = await page.locator('.failure-message').allTextContents();
   assert.deepEqual(failure, [], track + ' heat failed: ' + failure.join(' '));
   assert.equal(await page.locator('.result-course').innerText(), track);
+  if (track === 'Kepler Relay') {
+    assert.ok(await page.locator('.winner-card p').innerText() >= '1:00.00', 'Kepler Relay winner must race for at least a minute.');
+  }
   await assertRacers('.finish-order', entrants.slice(0, count));
   await assertMarked('.finish-order', marked);
   const rows = await page.locator('.finish-order li').evaluateAll(items => items.map(item => ({
@@ -185,6 +200,17 @@ try {
   const startButton = page.getByRole('button', { name: 'Start race' });
   await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false, undefined, { timeout: 90000 });
   await page.evaluate(() => document.fonts.ready);
+  const canFullscreen = await page.evaluate(() => document.fullscreenEnabled ?? document.webkitFullscreenEnabled);
+  if (canFullscreen) {
+    await enterFullscreen.focus();
+    await page.keyboard.press('Enter');
+    await assertFullscreen(true);
+    // A browser-initiated exit should update the toolbar without clicking its toggle.
+    await page.evaluate(() => (document.exitFullscreen ?? document.webkitExitFullscreen).call(document));
+    await assertFullscreen(false);
+  } else {
+    assert.equal(await enterFullscreen.isVisible(), false);
+  }
   await page.getByRole('button', { name: 'Mute sound' }).click();
   await page.getByRole('button', { name: 'Enable sound' }).click();
   assert.equal(await nameInput(1).inputValue(), 'Veteran');
@@ -247,6 +273,12 @@ try {
   await page.getByRole('button', { name: 'Restart' }).click();
   await page.waitForSelector('body[data-view="countdown"]', { state: 'attached' });
   await verifyResults('Prism Speedway', fieldSize, marked);
+  if (canFullscreen) {
+    await enterFullscreen.click();
+    await assertFullscreen(true);
+    await exitFullscreen.click();
+    await assertFullscreen(false);
+  }
   assert.equal(await tally(), 1);
   await capture('prism-results');
   await page.getByRole('button', { name: 'Change setup' }).click();
@@ -272,21 +304,31 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  const seeds = { orrery: 82, tideglass: 58 };
+  const seeds = { orrery: 82, tideglass: 58, kepler: 23 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
-  const jumpShot = { approach: clock(orrery.Airborne - 1), target: clock(orrery.Airborne - .04) };
+  const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch']);
+  const jumpShots = {};
+  for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne]]) {
+    jumpShots[id] = { approach: clock(time - 1), target: clock(time - .04) };
+  }
   for (const [title, id, shots] of [
     ['Timber Corkscrew', 'timber', [['0:13.00', 'racing']]],
     ['Wireworks Drop', 'wireworks', [['0:07.00', 'rails'], ['0:25.00', 'racing']]],
     ['Midnight Orrery', 'orrery', [
       [clock(orrery['Escapement Gallery']), 'escapement'],
       [clock(orrery['Ecliptic Underpass']), 'underpass'],
-      [jumpShot.target, 'comet-skips'],
+      [jumpShots.orrery.target, 'comet-skips'],
     ]],
     ['Tideglass Conservatory', 'tideglass', [
       [clock(tideglass['Standing Wave Gallery']), 'standing-wave'],
       [clock(tideglass['Twin Frond Sluice']), 'twin-sluice'],
+    ]],
+    ['Kepler Relay', 'kepler', [
+      [clock(kepler['Solar Array Esses']), 'arrays'],
+      [clock(kepler['Gravity Dive']), 'gravity-dive'],
+      [jumpShots.kepler.target, 'vacuum-transfer'],
+      [clock(kepler['Aurora Catch']), 'aurora-catch'],
     ]],
   ]) {
     await trackButton(title).click();
@@ -313,14 +355,20 @@ try {
           return randomValues(array);
         };
         window.playtestActionShot = shot;
-      }, { seed: seeds[id], shot: id === 'orrery' ? jumpShot : undefined });
+      }, { seed: seeds[id], shot: jumpShots[id] });
     }
     await startButton.click();
     for (const [time, shot] of shots) {
       await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 90000 });
+      if (id === 'kepler' && shot === 'arrays' && canFullscreen) {
+        await enterFullscreen.click();
+        await assertFullscreen(true);
+        await exitFullscreen.click();
+        await assertFullscreen(false);
+      }
       await capture(id + '-' + shot);
+      if (time === jumpShots[id]?.target) await page.evaluate(() => { delete window.playtestActionShot; });
     }
-    if (id === 'orrery') await page.evaluate(() => { delete window.playtestActionShot; });
     await assertRacers('.running-order', entrants);
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
     assert.ok(await page.evaluate(() => window.playtestMusicStarted), title + ' must play a decoded music loop.');
@@ -330,8 +378,8 @@ try {
     await verifyResults(title, 6, 5);
     await page.getByRole('button', { name: 'Change setup' }).click();
   }
-  assert.equal(await tally(), 11);
-  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
+  assert.equal(await tally(), 13);
+  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'kepler', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -346,7 +394,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed six courses, six soundtrack requests, named entrants, restart, eleven timed heats and cumulative podium scoring:', game);
+  console.log('Passed seven courses, seven soundtrack requests, named entrants, restart, thirteen timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

@@ -1,0 +1,124 @@
+{
+  "seed": 1263553618,
+  "origin": {
+    "x": -37,
+    "z": -32,
+    "angle": 0
+  },
+  "laneCount": 6,
+  "halfWidth": 4.15,
+  "startS": 1.1,
+  "finishS": 291.07435253836974,
+  "sections": [
+    {
+      "name": "Docking Cradle",
+      "start": 0,
+      "end": 17
+    },
+    {
+      "name": "Solar Array Esses",
+      "start": 17,
+      "end": 50.512781037296605
+    },
+    {
+      "name": "Magnetosphere",
+      "start": 50.512781037296605,
+      "end": 91.36294824313174
+    },
+    {
+      "name": "Telemetry Straight",
+      "start": 91.36294824313174,
+      "end": 134.36294824313174
+    },
+    {
+      "name": "Far Side Turn",
+      "start": 134.36294824313174,
+      "end": 180.15655770326956
+    },
+    {
+      "name": "Gravity Dive",
+      "start": 180.15655770326956,
+      "end": 196.15655770326956
+    },
+    {
+      "name": "Vacuum Transfer",
+      "start": 196.15655770326956,
+      "end": 209.15655770326956
+    },
+    {
+      "name": "Aurora Catch",
+      "start": 209.15655770326956,
+      "end": 240.15655770326956
+    },
+    {
+      "name": "Orbital Return",
+      "start": 240.15655770326956,
+      "end": 270.87435253836975
+    },
+    {
+      "name": "Beacon Approach",
+      "start": 270.87435253836975,
+      "end": 295.87435253836975
+    }
+  ],
+  "runs": [
+    {
+      "length": 17,
+      "curvature": 0
+    },
+    {
+      "length": 9.756390518648303,
+      "curvature": 0.07692307692307693
+    },
+    {
+      "length": 9.756390518648303,
+      "curvature": -0.07692307692307693
+    },
+    {
+      "length": 14,
+      "curvature": 0
+    },
+    {
+      "length": 40.85016720583513,
+      "curvature": 0.07690525812929942
+    },
+    {
+      "length": 43,
+      "curvature": 0
+    },
+    {
+      "length": 39.79360946013782,
+      "curvature": -0.07894716504007508
+    },
+    {
+      "length": 66,
+      "curvature": 0
+    },
+    {
+      "length": 15.3588974175501,
+      "curvature": 0.0625
+    },
+    {
+      "length": 15.3588974175501,
+      "curvature": -0.0625
+    },
+    {
+      "length": 25,
+      "curvature": 0
+    }
+  ],
+  "jump": {
+    "diveStart": 180.15655770326956,
+    "rampStart": 196.15655770326956,
+    "takeoff": 201.15655770326956,
+    "landing": 209.15655770326956
+  },
+  "launchTrims": [
+    1.85,
+    1.4,
+    1,
+    0.48,
+    0.24,
+    0.06
+  ]
+}

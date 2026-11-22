@@ -42,6 +42,8 @@ const liveries = [
 const icons = {
   sound: '<path d="M11.5 4.5 6.7 8.4H3v7.2h3.7l4.8 3.9z"/><path d="M15 8a5.6 5.6 0 0 1 0 8m3-11a9.5 9.5 0 0 1 0 14"/>',
   mute: '<path d="M11.5 4.5 6.7 8.4H3v7.2h3.7l4.8 3.9z"/><path d="m16 9 6 6m0-6-6 6"/>',
+  expand: '<path d="M9 4H4v5m11-5h5v5M4 15v5h5m6 0h5v-5"/>',
+  collapse: '<path d="M4 9h5V4m6 0v5h5M4 15h5v5m6 0v-5h5"/>',
   trophy: '<path d="M7 3h10v6a5 5 0 0 1-10 0V3Zm5 12v5m-4 1h8M7 6H3v2c0 2.4 1.8 4 4.6 4m9.4-6h4v2c0 2.4-1.8 4-4.6 4"/>',
   arrow: '<path d="M3 12h17m-6-6 6 6-6 6"/>',
   replay: '<path d="M3.5 10a8.5 8.5 0 1 1 .4 5M3.5 4v6h6"/>',
@@ -52,6 +54,39 @@ const icons = {
 
 function icon(key: keyof typeof icons) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[key] + '</svg>';
+}
+
+function bindFullscreen(button: HTMLButtonElement, status: HTMLElement) {
+  const doc = document as Document & {
+    webkitFullscreenEnabled?: boolean;
+    webkitFullscreenElement?: Element;
+    webkitExitFullscreen?: () => void | Promise<void>;
+  };
+  const root = doc.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void | Promise<void> };
+  const standard = doc.fullscreenEnabled && typeof root.requestFullscreen === 'function' && typeof doc.exitFullscreen === 'function';
+  const webkit = doc.webkitFullscreenEnabled && typeof root.webkitRequestFullscreen === 'function' && typeof doc.webkitExitFullscreen === 'function';
+  if (!standard && !webkit) return;
+
+  const enter = standard ? root.requestFullscreen.bind(root) : root.webkitRequestFullscreen!.bind(root);
+  const exit = standard ? doc.exitFullscreen.bind(doc) : doc.webkitExitFullscreen!.bind(doc);
+  const active = () => Boolean(doc.fullscreenElement || doc.webkitFullscreenElement);
+  function sync() {
+    const full = active();
+    button.innerHTML = icon(full ? 'collapse' : 'expand');
+    button.title = full ? 'Exit full screen' : 'Enter full screen';
+    button.setAttribute('aria-label', button.title);
+  }
+  doc.addEventListener(standard ? 'fullscreenchange' : 'webkitfullscreenchange', sync);
+  button.addEventListener('click', async () => {
+    try {
+      if (active()) await exit();
+      else await enter();
+    } catch {
+      status.textContent = 'The browser could not change full screen mode.';
+    }
+  });
+  sync();
+  button.hidden = false;
 }
 
 function escapeText(value: string) {
@@ -121,7 +156,8 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       <div class="brand" aria-label="Marble Run"><span class="brand-mark" aria-hidden="true"><i></i></span><span>Marble<span class="brand-run">Run</span></span></div>
       <div class="top-actions">
         <button type="button" class="top-button restart-button" aria-label="Restart race" hidden>${icon('replay')}<span>Restart</span></button>
-        <button type="button" class="top-button standings-button">${icon('trophy')}<span>Standings</span></button>
+        <button type="button" class="top-button standings-button" aria-label="Standings">${icon('trophy')}<span>Standings</span></button>
+        <button type="button" class="top-button fullscreen-button" hidden></button>
         <button type="button" class="top-button sound-button"></button>
       </div>
     </header>
@@ -155,6 +191,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   const restartButton = element<HTMLButtonElement>('.restart-button');
   const dialog = element<HTMLDialogElement>('.standings-dialog');
   const status = element<HTMLElement>('.status-announcement');
+  bindFullscreen(element<HTMLButtonElement>('.fullscreen-button'), status);
 
   function previewRacers() {
     return config.entries.slice(0, config.count).map((entry, slot) => {

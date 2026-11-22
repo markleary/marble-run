@@ -23,8 +23,12 @@ export const courses = {
     title: 'Tideglass Conservatory',
     features: ['Sea-glass flume', 'Standing waves', 'Twin sluice'],
   },
+  kepler: {
+    title: 'Kepler Relay',
+    features: ['Gravity dive', 'Vacuum transfer', 'Aurora glass flume'],
+  },
 } as const;
 
 export type CourseId = keyof typeof courses;
-export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass'];
+export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass', 'kepler'];
 export const fieldSizes = [2, 3, 4, 5, 6];

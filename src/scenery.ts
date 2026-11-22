@@ -8,18 +8,19 @@ import { createTimberScenery } from './timberScenery'
 import { createWireworksScenery } from './wireworksScenery'
 import { createOrreryScenery } from './orreryScenery'
 import { createTideglassScenery } from './tideglassScenery'
+import { createKeplerScenery } from './keplerScenery'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
 const scenery = {
   prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery,
-  wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery,
+  wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery, kepler: createKeplerScenery,
 }
 
 export type CourseScenery = THREE.Group & { setRaceTime?(seconds: number): void }
 
-export function createCourseScenery(track: CourseTrack): CourseScenery {
-  return scenery[track.id](track)
+export function createCourseScenery(track: CourseTrack, onReady?: () => void): CourseScenery {
+  return scenery[track.id](track, onReady)
 }
 
 function createPrismScenery(track: CourseTrack): THREE.Group {
