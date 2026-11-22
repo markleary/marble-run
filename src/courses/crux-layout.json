@@ -1,220 +1,381 @@
 {
   "seed": 1129469272,
   "origin": {
-    "x": -26,
-    "z": -41,
+    "x": -73,
+    "z": -121,
     "angle": 0
   },
   "laneCount": 6,
-  "halfWidth": 4,
+  "halfWidth": 4.35,
   "startS": 1.1,
-  "finishS": 453.7750584384942,
+  "finishS": 1171.7079331235957,
   "launchTrims": [
-    0.635,
-    0.549,
-    0.446,
-    0.372,
-    0.269,
-    0.177
+    0.75,
+    0.61,
+    0.47,
+    0.34,
+    0.22,
+    0.12
   ],
-  "startingCamber": 0.25,
-  "slabCants": [
-    0.16,
-    -0.19,
-    0.18,
-    -0.15
-  ],
-  "volumes": [
+  "jumps": [
     {
-      "s": 87.20353755551324,
-      "lateral": -2.15,
-      "length": 7.3,
-      "width": 2.65,
-      "height": 0.8876278811926022,
-      "skew": 0.16
+      "sectionIndex": 1,
+      "name": "Headwall Gap",
+      "diveStart": 34.8,
+      "rampStart": 64.8,
+      "takeoff": 70,
+      "landing": 76.1,
+      "catchEnd": 120.1,
+      "dive": 5.4778293069568464,
+      "rise": 2.05,
+      "drop": 4.4
     },
     {
-      "s": 91.70353755551324,
-      "lateral": 0.95,
-      "length": 8.6,
-      "width": 3.35,
-      "height": 1.0931061945762486,
-      "skew": -0.16
+      "sectionIndex": 3,
+      "name": "Dyno Gap",
+      "diveStart": 232.6566310325652,
+      "rampStart": 262.6566310325652,
+      "takeoff": 268.2566310325652,
+      "landing": 275.1566310325652,
+      "catchEnd": 319.1566310325652,
+      "dive": 5.509786135028117,
+      "rise": 2.26,
+      "drop": 4.7
     },
     {
-      "s": 102.70353755551324,
-      "lateral": 2.08,
-      "length": 8.3,
-      "width": 2.83,
-      "height": 0.9826911084493621,
-      "skew": -0.13
+      "sectionIndex": 7,
+      "name": "Slab Gap",
+      "diveStart": 655.9822820780804,
+      "rampStart": 685.9822820780804,
+      "takeoff": 691.4822820780804,
+      "landing": 698.6822820780804,
+      "catchEnd": 742.6822820780804,
+      "dive": 5.449031465954613,
+      "rise": 2.1,
+      "drop": 4.8
     },
     {
-      "s": 106.70353755551324,
-      "lateral": -0.95,
-      "length": 7.2,
-      "width": 3.12,
-      "height": 0.821455753017217,
-      "skew": 0.17
-    },
-    {
-      "s": 118.70353755551324,
-      "lateral": -2.21,
-      "length": 7.8,
-      "width": 2.76,
-      "height": 0.8414550613658502,
-      "skew": -0.15
-    },
-    {
-      "s": 122.70353755551324,
-      "lateral": 1.16,
-      "length": 9.4,
-      "width": 3.3,
-      "height": 0.9901840702909976,
-      "skew": 0.14
+      "sectionIndex": 11,
+      "name": "Summit Gap",
+      "diveStart": 1079.9079331235957,
+      "rampStart": 1109.9079331235957,
+      "takeoff": 1115.7079331235957,
+      "landing": 1123.3079331235956,
+      "catchEnd": 1167.3079331235956,
+      "dive": 5.383491892600432,
+      "rise": 2.39,
+      "drop": 5.1
     }
   ],
   "sections": [
     {
       "name": "Belay Gate",
       "start": 0,
-      "end": 14
+      "end": 18
     },
     {
-      "name": "Speed Wall",
-      "start": 14,
-      "end": 54
+      "name": "Headwall Launch",
+      "start": 18,
+      "end": 127
     },
     {
-      "name": "Chalk Turn",
-      "start": 54,
-      "end": 80.70353755551324
+      "name": "Chalk Velodrome",
+      "start": 127,
+      "end": 224.25663103256522
     },
     {
-      "name": "Volume Alley",
-      "start": 80.70353755551324,
-      "end": 133.70353755551324
+      "name": "Dyno Straight",
+      "start": 224.25663103256522,
+      "end": 362.2566310325652
     },
     {
       "name": "Arête Hairpin",
-      "start": 133.70353755551324,
-      "end": 160.40707511102647
+      "start": 362.2566310325652,
+      "end": 462.65485471872023
     },
     {
       "name": "Ribbon Traverse",
-      "start": 160.40707511102647,
-      "end": 215.634211442138
+      "start": 462.65485471872023,
+      "end": 548.6548547187202
     },
     {
       "name": "Highball Bend",
-      "start": 215.634211442138,
-      "end": 241.5523508342538
+      "start": 548.6548547187202,
+      "end": 647.4822820780804
     },
     {
-      "name": "Slab Switches",
-      "start": 241.5523508342538,
-      "end": 295.5523508342538
+      "name": "Slab Flight",
+      "start": 647.4822820780804,
+      "end": 786.4822820780804
     },
     {
       "name": "Compass Turn",
-      "start": 295.5523508342538,
-      "end": 321.4704902263696
+      "start": 786.4822820780804,
+      "end": 888.4513020910304
     },
     {
       "name": "Final Traverse",
-      "start": 321.4704902263696,
-      "end": 373.9277153731733
+      "start": 888.4513020910304,
+      "end": 976.4513020910304
     },
     {
       "name": "Summit Hook",
-      "start": 373.9277153731733,
-      "end": 398.2750584384942
+      "start": 976.4513020910304,
+      "end": 1073.7079331235957
     },
     {
       "name": "Summit Runout",
-      "start": 398.2750584384942,
-      "end": 458.2750584384942
+      "start": 1073.7079331235957,
+      "end": 1180.7079331235957
     }
   ],
   "runs": [
     {
-      "length": 14,
+      "length": 18,
       "curvature": 0
     },
     {
-      "length": 40,
+      "length": 109,
       "curvature": 0
     },
     {
-      "length": 26.70353755551324,
-      "curvature": 0.11764705882352941
+      "length": 5,
+      "curvature": 0.004347826086956522
     },
     {
-      "length": 53,
+      "length": 5,
+      "curvature": 0.013043478260869565
+    },
+    {
+      "length": 5,
+      "curvature": 0.021739130434782608
+    },
+    {
+      "length": 5,
+      "curvature": 0.030434782608695653
+    },
+    {
+      "length": 5,
+      "curvature": 0.0391304347826087
+    },
+    {
+      "length": 47.25663103256524,
+      "curvature": 0.043478260869565216
+    },
+    {
+      "length": 5,
+      "curvature": 0.0391304347826087
+    },
+    {
+      "length": 5,
+      "curvature": 0.030434782608695653
+    },
+    {
+      "length": 5,
+      "curvature": 0.021739130434782608
+    },
+    {
+      "length": 5,
+      "curvature": 0.013043478260869565
+    },
+    {
+      "length": 5,
+      "curvature": 0.004347826086956522
+    },
+    {
+      "length": 138,
       "curvature": 0
     },
     {
-      "length": 26.70353755551324,
-      "curvature": -0.11764705882352941
+      "length": 5,
+      "curvature": -0.004166666666666667
     },
     {
-      "length": 12,
+      "length": 5,
+      "curvature": -0.0125
+    },
+    {
+      "length": 5,
+      "curvature": -0.020833333333333332
+    },
+    {
+      "length": 5,
+      "curvature": -0.029166666666666667
+    },
+    {
+      "length": 5,
+      "curvature": -0.0375
+    },
+    {
+      "length": 50.398223686155035,
+      "curvature": -0.041666666666666664
+    },
+    {
+      "length": 5,
+      "curvature": -0.0375
+    },
+    {
+      "length": 5,
+      "curvature": -0.029166666666666667
+    },
+    {
+      "length": 5,
+      "curvature": -0.020833333333333332
+    },
+    {
+      "length": 5,
+      "curvature": -0.0125
+    },
+    {
+      "length": 5,
+      "curvature": -0.004166666666666667
+    },
+    {
+      "length": 86,
       "curvature": 0
     },
     {
-      "length": 6.8067840827778845,
-      "curvature": 0.07692307692307693
+      "length": 5,
+      "curvature": 0.00425531914893617
     },
     {
-      "length": 13.613568165555769,
-      "curvature": -0.07692307692307693
+      "length": 5,
+      "curvature": 0.01276595744680851
     },
     {
-      "length": 6.8067840827778845,
-      "curvature": 0.07692307692307693
+      "length": 5,
+      "curvature": 0.02127659574468085
     },
     {
-      "length": 16,
+      "length": 5,
+      "curvature": 0.029787234042553193
+    },
+    {
+      "length": 5,
+      "curvature": 0.03829787234042553
+    },
+    {
+      "length": 48.827427359360144,
+      "curvature": 0.0425531914893617
+    },
+    {
+      "length": 5,
+      "curvature": 0.03829787234042553
+    },
+    {
+      "length": 5,
+      "curvature": 0.029787234042553193
+    },
+    {
+      "length": 5,
+      "curvature": 0.02127659574468085
+    },
+    {
+      "length": 5,
+      "curvature": 0.01276595744680851
+    },
+    {
+      "length": 5,
+      "curvature": 0.00425531914893617
+    },
+    {
+      "length": 139,
       "curvature": 0
     },
     {
-      "length": 25.918139392115794,
-      "curvature": 0.12121212121212122
+      "length": 5,
+      "curvature": -0.004081632653061225
     },
     {
-      "length": 54,
+      "length": 5,
+      "curvature": -0.012244897959183673
+    },
+    {
+      "length": 5,
+      "curvature": -0.02040816326530612
+    },
+    {
+      "length": 5,
+      "curvature": -0.02857142857142857
+    },
+    {
+      "length": 5,
+      "curvature": -0.036734693877551024
+    },
+    {
+      "length": 51.969020012949926,
+      "curvature": -0.04081632653061224
+    },
+    {
+      "length": 5,
+      "curvature": -0.036734693877551024
+    },
+    {
+      "length": 5,
+      "curvature": -0.02857142857142857
+    },
+    {
+      "length": 5,
+      "curvature": -0.02040816326530612
+    },
+    {
+      "length": 5,
+      "curvature": -0.012244897959183673
+    },
+    {
+      "length": 5,
+      "curvature": -0.004081632653061225
+    },
+    {
+      "length": 88,
       "curvature": 0
     },
     {
-      "length": 25.918139392115794,
-      "curvature": -0.12121212121212122
+      "length": 5,
+      "curvature": 0.004347826086956522
     },
     {
-      "length": 16,
-      "curvature": 0
+      "length": 5,
+      "curvature": 0.013043478260869565
     },
     {
-      "length": 5.8643062867009474,
-      "curvature": -0.08333333333333333
+      "length": 5,
+      "curvature": 0.021739130434782608
     },
     {
-      "length": 11.728612573401895,
-      "curvature": 0.08333333333333333
+      "length": 5,
+      "curvature": 0.030434782608695653
     },
     {
-      "length": 5.8643062867009474,
-      "curvature": -0.08333333333333333
+      "length": 5,
+      "curvature": 0.0391304347826087
     },
     {
-      "length": 13,
-      "curvature": 0
+      "length": 47.25663103256524,
+      "curvature": 0.043478260869565216
     },
     {
-      "length": 24.347343065320896,
-      "curvature": 0.12903225806451613
+      "length": 5,
+      "curvature": 0.0391304347826087
     },
     {
-      "length": 60,
+      "length": 5,
+      "curvature": 0.030434782608695653
+    },
+    {
+      "length": 5,
+      "curvature": 0.021739130434782608
+    },
+    {
+      "length": 5,
+      "curvature": 0.013043478260869565
+    },
+    {
+      "length": 5,
+      "curvature": 0.004347826086956522
+    },
+    {
+      "length": 107,
       "curvature": 0
     }
   ]

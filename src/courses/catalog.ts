@@ -29,7 +29,7 @@ export const courses = {
   },
   crux: {
     title: 'Crux Mountain Masters',
-    features: ['2+ min', 'Climbing volumes', 'Counter-banked slabs', 'Knockout gates'],
+    features: ['2+ min', 'Gap jumps', 'Banked hairpins', 'Knockout gates'],
   },
 } as const;
 

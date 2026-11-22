@@ -274,9 +274,9 @@ export function createUI(container: HTMLElement, actions: UIActions) {
         button.setAttribute('aria-pressed', String(button.dataset.format === config.format));
       });
       const cutCount = config.count - 2;
-      const rule = config.format === 'endurance' ? 'Race all four checkpoints to the finish.'
-        : cutCount === 0 ? 'Both finalists race through all four checkpoints.'
-        : 'Last across ' + (cutCount === 4 ? 'each checkpoint' : cutCount === 1 ? 'the final checkpoint' : 'each of the last ' + cutCount + ' checkpoints') + ' is out. Two race to the finish.';
+      const rule = config.format === 'endurance' ? 'Gates stay open. All marbles race to the finish.'
+        : cutCount === 0 ? 'Two finalists race straight to the finish.'
+        : (cutCount === 1 ? 'One cut at CP 4.' : 'Cuts at CP ' + (5 - cutCount) + '–4.') + ' Last in is out. Qualifiers restart together.';
       format.querySelector('p')!.textContent = rule;
     }
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
@@ -375,13 +375,19 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   function updateCheckpoint(seconds: number, gates?: readonly RaceCheckpoint[]) {
     checkpointStatus.hidden = !gates;
     if (!gates) return;
-    const pending = gates.find(gate => gate.arrivals.length < gate.field);
-    let message = pending ? pending.name + ' · ' + (pending.cut ? 'Last racer out' : 'Timing split') : 'Final stretch';
-    for (const gate of gates) {
-      const leader = gate.arrivals[0];
-      if (leader && seconds - leader.time < 3) message = gate.name + ' · ' + racers[leader.id].name + ' leads';
-      const last = gate.arrivals[gate.field - 1];
-      if (gate.cut && last && seconds - last.time < 5) message = gate.name + ' · ' + racers[last.id].name + ' out';
+    const next = gates.find(gate => gate.cut && gate.releasedAt === null);
+    const split = gates.find(gate => gate.arrivals.length < gate.field);
+    let message = next ? next.name + ' · ' + (next.field - 1) + ' places'
+      : split ? split.name + ' · Open gate' : 'Final stretch';
+    const released = gates.find(gate => gate.releasedAt !== null && seconds - gate.releasedAt < 3);
+    if (next?.phase === 'loading') {
+      const last = next.arrivals[next.field - 1];
+      message = next.name + ' · ' + (last ? racers[last.id].name + ' out'
+        : Math.min(next.field - 1, next.arrivals.length) + '/' + (next.field - 1) + ' qualified');
+    } else if (released) {
+      message = released.name + ' · ' + (released.field - 1) + ' released · ' + racers[released.arrivals[released.field - 1].id].name + ' out';
+    } else if (!next && split?.arrivals[0]) {
+      message = split.name + ' · ' + racers[split.arrivals[0].id].name + ' leads';
     }
     if (checkpointStatus.textContent !== message) checkpointStatus.textContent = message;
   }

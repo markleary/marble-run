@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import type { CourseTrack, TrackSample } from './track'
+import type { MarbleState } from './simulation'
+import type { RaceCheckpoint } from './cruxCompetition'
 import { roundedLaneBands } from './courseGeometry'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
 import { createFrostlineScenery } from './frostlineScenery'
@@ -19,7 +21,12 @@ const scenery = {
   kepler: createKeplerScenery, crux: createCruxScenery,
 }
 
-export type CourseScenery = THREE.Group & { setRaceTime?(seconds: number): void; frameCamera?(camera: THREE.Camera): void }
+export type CourseScenery = THREE.Group & {
+  setRaceTime?(seconds: number): void
+  frameCamera?(camera: THREE.Camera): void
+  updateStations?(gates: readonly RaceCheckpoint[] | undefined, seconds: number): void
+  showCutMarble?(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number): boolean
+}
 
 export function createCourseScenery(track: CourseTrack, onReady?: () => void): CourseScenery {
   return scenery[track.id](track, onReady)

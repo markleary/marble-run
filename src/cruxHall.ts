@@ -75,6 +75,7 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
   const charcoal = material('#22333a', .76), seam = material('#76817c', .75)
   const aluminum = material('#b7c4bc', .45, .45), pads = material('#496a76', .88)
   const holds = holdColors.map(color => material(color, .72))
+  const gripShape = new THREE.IcosahedronGeometry(1, 0)
   const glass = material('#d7e7e8', .35, .15)
   glass.emissive.set('#b7d6dd'); glass.emissiveIntensity = .32
   const banner = material('#ffffff', .8)
@@ -98,6 +99,7 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
   const perimeters: { mesh: THREE.Group; mid: THREE.Vector3; inward: THREE.Vector3 }[] = []
   function wall(mid: THREE.Vector3, yaw: number, width: number, wallIndex: number) {
     const mesh = new THREE.Group(), batch = new SceneryBatch()
+    const grips: { transform: THREE.Matrix4; color: THREE.Color }[] = []
     const inward = v(Math.sin(yaw), 0, Math.cos(yaw)), along = v(Math.cos(yaw), 0, -Math.sin(yaw))
     const at = (x: number, y: number, depth: number) =>
       mid.clone().addScaledVector(along, x).addScaledVector(inward, depth).addScaledVector(THREE.Object3D.DEFAULT_UP, y)
@@ -109,25 +111,27 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
       geom.setIndex(indices); batch.add(mat, geom)
     }
     // Climbing panels share edges even where a bay leans dramatically into the hall.
+    const rows = Math.max(3, Math.round(hallHeight / 14))
+    const stepHeight = hallHeight / rows
     const ledge = (i: number, row: number) => {
-      const shape = (2.8 + 2.2 * Math.sin(i * 1.23 + wallIndex) + .9 * Math.cos(i * 2.43)) / 6
-      return [0, 1.3 + .65 * shape, 1.2 + 4.15 * shape, 1.5 + 2.6 * shape][row]
+      if (row === 0) return 0
+      return 2.6 + 1.23 * Math.sin(i * 1.23 + wallIndex + row * .77)
+        + .82 * Math.cos(row * 2.74 + i * .48)
     }
-    const levels = [0, hallHeight * .31, hallHeight * .68, hallHeight]
     for (let i = 0; i < bayCount; i++) {
       const left = -width / 2 + bay * i
       const surface = (u: number, y: number) => {
-        const row = y < levels[1] ? 0 : y < levels[2] ? 1 : 2
-        const t = (y - levels[row]) / (levels[row + 1] - levels[row])
+        const row = Math.min(rows - 1, Math.floor(y / stepHeight))
+        const t = y / stepHeight - row
         const near = THREE.MathUtils.lerp(ledge(i, row), ledge(i + 1, row), u)
         const high = THREE.MathUtils.lerp(ledge(i, row + 1), ledge(i + 1, row + 1), u)
         return THREE.MathUtils.lerp(near, high, t)
       }
       const onWall = (u: number, y: number, depth = 0) => at(left + bay * u, y, surface(u, y) + depth)
-      for (let row = 0; row < 3; row++) {
-        const y0 = levels[row], y1 = levels[row + 1]
+      for (let row = 0; row < rows; row++) {
+        const y0 = row * stepHeight, y1 = (row + 1) * stepHeight
         const corners = [onWall(0, y0), onWall(1, y0), onWall(1, y1), onWall(0, y1)]
-        const color = panels[(Math.floor((i + wallIndex) / 2) + (row === 1 ? 0 : 1)) % panels.length]
+        const color = panels[(Math.floor((i + wallIndex + row) / 2) + Math.floor(row / 2)) % panels.length]
         face(color, corners, [0, 0, bay / 3, 0, bay / 3, (y1 - y0) / 3, 0, (y1 - y0) / 3], [0, 1, 2, 0, 2, 3])
         batch.rod(seam, corners[0], corners[3], .037, 4)
         batch.rod(seam, corners[2], corners[3], .046, 4)
@@ -135,7 +139,7 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
       // Distinct color routes wind through real protruding slopers, jugs and pyramidal volumes.
       for (let route = 0; route < 2; route++) {
         const paint = holds[(i + wallIndex + route * 2) % holds.length]
-        const count = route ? 9 : 12
+        const count = Math.ceil(hallHeight / (route ? 3.4 : 2.7))
         for (let k = 0; k < count; k++) {
           const y = (1.8 + (k + route * .39) / count * (hallHeight - 3.4))
           const u = .27 + .43 * route + .12 * Math.sin(i * 3 + k * 1.58 + route * .6)
@@ -148,7 +152,7 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
           } else {
             const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(.2, yaw, .7 * Math.sin(k * 2.13), 'YXZ'))
             const scale = v(.44 + .24 * Math.cos(k) ** 2, .23 + .18 * Math.sin(i + k) ** 2, .26)
-            batch.add(paint, new THREE.IcosahedronGeometry(1, 0), new THREE.Matrix4().compose(a, quat, scale))
+            grips.push({ transform: new THREE.Matrix4().compose(a, quat, scale), color: paint.color })
           }
         }
       }
@@ -178,6 +182,12 @@ export function createCruxHall(group: THREE.Group, bounds: THREE.Box3, floorY: n
       const transform = new THREE.Matrix4().makeRotationY(yaw).setPosition(p.clone().addScaledVector(inward, .13))
       batch.add(banner, new THREE.PlaneGeometry(width, height), transform)
     }
+    // One shared shape and one draw per wall carry thousands of small climbing holds.
+    const routes = new THREE.InstancedMesh(gripShape, material('#ffffff', .72), grips.length)
+    grips.forEach(({ transform, color }, index) => {
+      routes.setMatrixAt(index, transform); routes.setColorAt(index, color)
+    })
+    mesh.add(routes)
     batch.finish(mesh)
     for (const child of mesh.children) child.castShadow = false
     group.add(mesh); perimeters.push({ mesh, mid, inward })

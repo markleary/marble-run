@@ -19,6 +19,7 @@ let countdownRemaining = 0;
 let accumulator = 0;
 let lastHUD = -1;
 let lastFinishCount = 0;
+let lastGateReleases = 0;
 let lastTimestamp = 0;
 let settling = 0;
 let contextLost = false;
@@ -122,7 +123,7 @@ async function boot() {
     heat = new RaceSimulation(track, entrants.length, crypto.getRandomValues(new Uint32Array(1))[0], format);
     sound.startMusic(track.id);
     broadcast!.entrants(entrants);
-    countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastHUD = -1;
+    countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastGateReleases = 0; lastHUD = -1;
     racingState = 'countdown';
     void syncScreenLock();
     ui.showCountdown(3); broadcast!.grid();
@@ -154,7 +155,7 @@ async function boot() {
         racingState = 'race'; heat.release(); ui.showRace(); broadcast!.race();
         sound.play('gate');
       } else if (before !== after) ui.showCountdown(after);
-      broadcast!.update(heat.marbles, 1, dt, 0);
+      broadcast!.update(heat.marbles, 1, dt, 0, heat.competition?.gates);
       return;
     }
     if (racingState === 'race') {
@@ -165,6 +166,11 @@ async function boot() {
         accumulator -= FIXED_DT;
       }
       const finishedCount = heat.marbles.filter(marble => marble.finishTime !== null).length;
+      if (heat.competition) {
+        const releases = heat.competition.gates.filter(gate => gate.releasedAt !== null).length;
+        if (releases > lastGateReleases) sound.play('gate', 0.7);
+        lastGateReleases = releases;
+      }
       if (finishedCount > lastFinishCount) {
         sound.play('bell', lastFinishCount ? 0.36 : 0.85);
         lastFinishCount = finishedCount;
@@ -184,7 +190,7 @@ async function boot() {
         const surfaces = { lacquer: 0, wood: 0, ice: 0, wire: 0, glass: 0, alloy: 0 };
         let rolling = 0, speed = 0;
         for (const marble of active) {
-          const surface = heat.rollingSurface(marble, track.id === 'kepler' ? 'support' : 'any');
+          const surface = heat.rollingSurface(marble, track.id === 'kepler' || track.id === 'crux' ? 'support' : 'any');
           if (surface) { surfaces[surface]++; speed += marble.speed; rolling++; }
         }
         if (rolling) {
@@ -193,12 +199,12 @@ async function boot() {
           sound.rolling(speed / rolling, surfaces.wood / rolling, hiss / rolling, rattle / rolling);
         } else sound.stopRolling();
       }
-      broadcast!.update(heat.marbles, Math.min(1, accumulator / FIXED_DT), dt, heat.elapsed);
+      broadcast!.update(heat.marbles, Math.min(1, accumulator / FIXED_DT), dt, heat.elapsed, heat.competition?.gates);
     } else if (racingState === 'results' && settling > 0) {
       settling -= dt;
       accumulator += dt;
       while (accumulator >= FIXED_DT) { heat.coast(); accumulator -= FIXED_DT; }
-      broadcast!.update(heat.marbles, accumulator / FIXED_DT, dt, heat.elapsed);
+      broadcast!.update(heat.marbles, accumulator / FIXED_DT, dt, heat.elapsed, heat.competition?.gates);
     }
   }
   // Static menus and finished podiums need another frame only after an interaction or resize.

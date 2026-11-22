@@ -12,5 +12,7 @@ export function crossingTime(marble: MarbleState, line: TrackSample, radius: num
 export function compareRacePosition(a: MarbleState, b: MarbleState) {
   if (a.cutAt || b.cutAt) return (b.cutAt ?? Infinity) - (a.cutAt ?? Infinity)
   if (a.finishTime !== null || b.finishTime !== null) return (a.finishTime ?? Infinity) - (b.finishTime ?? Infinity)
+  // The timing beam fixes qualifying order while the conveyor fans racers into their seats.
+  if (a.stagingAt !== undefined || b.stagingAt !== undefined) return (a.rackSlot ?? Infinity) - (b.rackSlot ?? Infinity)
   return b.distance - a.distance
 }
