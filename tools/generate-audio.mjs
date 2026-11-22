@@ -2,10 +2,13 @@ import { access, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderCruxScore } from './crux-score.mjs';
 
 const directory = new URL('../public/audio/', import.meta.url);
-const key = process.env.ELEVENLABS_API_KEY;
-if (!key) throw new Error('Set ELEVENLABS_API_KEY in the local .env file.');
+function elevenLabsKey() {
+  if (!process.env.ELEVENLABS_API_KEY) throw new Error('Set ELEVENLABS_API_KEY in the local .env file.');
+  return process.env.ELEVENLABS_API_KEY;
+}
 const clips = [
   ['gate', 1.1, false, 'One crisp mechanical release of a miniature spring-loaded metal starting gate on a wooden toy race track. A quick click-clack then silence. Close microphone, dry foley.'],
   ['roll-lacquer', 4, true, 'Close dry foley of one small solid glass marble steadily rolling over a smooth lacquered wooden toy track. A delicate continuous low rasp with a clear fine spinning whirr. Uniform throughout.'],
@@ -21,7 +24,7 @@ for (const [name, duration, loop, prompt] of clips) {
   if (await access(file).then(() => true, () => false)) continue;
   const response = await fetch('https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_128', {
     method: 'POST',
-    headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+    headers: { 'xi-api-key': elevenLabsKey(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: prompt, duration_seconds: duration, loop, model_id: 'eleven_text_to_sound_v3' })
   });
   if (!response.ok) throw new Error('ElevenLabs returned HTTP ' + response.status + ' for ' + name);
@@ -78,13 +81,21 @@ function chooseLoop(source, bpm, loopBars) {
 
 const cache = new URL('../node_modules/.cache/marble-run-audio/', import.meta.url);
 await mkdir(cache, { recursive: true });
+function masterLoop(id, inputArgs, output) {
+  const meter = spawnSync('ffmpeg', ['-hide_banner', '-nostats', ...inputArgs, '-af', 'ebur128', '-f', 'null', '-'], { encoding: 'utf8' });
+  const lufs = Number(meter.stderr?.match(/Integrated loudness:\s+I:\s+(-?[\d.]+) LUFS/)?.[1]);
+  if (!Number.isFinite(lufs) || meter.status !== 0) throw new Error('Could not measure the ' + id + ' score.');
+  execFileSync('ffmpeg', ['-v', 'error', ...inputArgs, '-af', 'volume=' + (-22 - lufs).toFixed(2) + 'dB',
+    '-ar', '44100', '-ac', '2', '-codec:a', 'libmp3lame', '-b:a', '128k', output]);
+}
+
 for (const [id, bpm, brief, loopBars = 8] of scores) {
   const output = new URL('music-' + id + '.mp3', directory);
   if (await access(output).then(() => true, () => false)) continue;
   const source = new URL(id + '-source.mp3', cache);
   if (!await access(source).then(() => true, () => false)) {
     const response = await fetch('https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128', {
-      method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'xi-api-key': elevenLabsKey(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_id: 'music_v2_5', force_instrumental: true,
         music_length_ms: Math.round((loopBars + 4) * 4 * 60 / bpm * 1000),
@@ -116,11 +127,20 @@ for (const [id, bpm, brief, loopBars = 8] of scores) {
     const loop = join(work, 'loop.wav');
     const mastered = join(work, 'loop.mp3');
     execFileSync('ffmpeg', ['-v', 'error', '-i', fileURLToPath(source), '-filter_complex', filter, '-map', '[out]', '-c:a', 'pcm_f32le', loop]);
-    const meter = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', loop, '-af', 'ebur128', '-f', 'null', '-'], { encoding: 'utf8' });
-    const lufs = Number(meter.stderr?.match(/Integrated loudness:\s+I:\s+(-?[\d.]+) LUFS/)?.[1]);
-    if (!Number.isFinite(lufs) || meter.status !== 0) throw new Error('Could not measure the ' + id + ' score.');
-    execFileSync('ffmpeg', ['-v', 'error', '-i', loop, '-af', 'volume=' + (-22 - lufs).toFixed(2) + 'dB', '-ar', '44100', '-ac', '2', '-codec:a', 'libmp3lame', '-b:a', '128k', mastered]);
+    masterLoop(id, ['-i', loop], mastered);
     await rename(mastered, output);
     console.log('Generated music-' + id + ' (' + (end - start).toFixed(2) + ' s)');
+  } finally { await rm(work, { recursive: true, force: true }); }
+}
+
+const cruxScore = new URL('music-crux.mp3', directory);
+if (!await access(cruxScore).then(() => true, () => false)) {
+  const work = await mkdtemp(new URL('crux-', cache));
+  try {
+    const pcm = join(work, 'score.f32'), mastered = join(work, 'score.mp3');
+    await renderCruxScore(pcm);
+    masterLoop('crux', ['-f', 'f32le', '-ar', '44100', '-ac', '2', '-i', pcm], mastered);
+    await rename(mastered, cruxScore);
+    console.log('Generated music-crux (128.00 s)');
   } finally { await rm(work, { recursive: true, force: true }); }
 }

@@ -7,6 +7,7 @@ import wireworksLayout from '../src/courses/wireworks-layout.json';
 import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
+import { checkCruxKnockouts } from './check-crux';
 import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
 import { initPhysics, RaceSimulation } from '../src/simulation';
 import type { MarbleState } from '../src/simulation';
@@ -105,6 +106,15 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
           winnerSeconds.push(winnerTime);
           transferSeconds.push(...transfer.seconds(seed));
+        } else if (track.id === 'crux') {
+          for (const gate of race.competition!.gates) {
+            assert.equal(gate.arrivals.length, count);
+            assert.equal(new Set(gate.arrivals.map(a => a.id)).size, count);
+            assert.ok(!gate.cut);
+          }
+          const winningTime = finishers[0].finishTime!;
+          assert.ok(winningTime >= 120, 'Crux winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
+          winnerSeconds.push(winningTime);
         }
         wins[finishers[0].slot]++;
         if (branchCenter) {
@@ -129,12 +139,14 @@ function exerciseField(track: CourseTrack, count: number) {
   console.log(JSON.stringify({
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
+    ...(winnerSeconds.length && {
+      [track.id === 'crux' ? 'winningSeconds' : 'winnerSeconds']: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
+    }),
     ...(branchCenter && { branchStarts, branchWins }),
     ...(forkExit && { mixedBranchHeats: mixed }),
     ...(transferSeconds.length && {
       transfers: transferSeconds.length,
       jumpAirSeconds: [Math.min(...transferSeconds), Math.max(...transferSeconds)].map(s => +s.toFixed(2)),
-      winnerSeconds: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
     }),
   }));
   if (forkExit && count === track.laneCount && repetitions >= 100) {
@@ -198,7 +210,8 @@ for (const id of courseIds) {
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
   if (id === 'kepler') checkKeplerReceiver(track);
-  if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass' || id === 'kepler') checkSectionStarts(track);
+  if (id === 'crux') checkCruxKnockouts(track, firstSeed, repetitions);
+  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux'].includes(id)) checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
   if (id === 'orrery') {

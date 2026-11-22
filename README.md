@@ -15,10 +15,13 @@ Use the fullscreen button in the top-right corner to expand the game or return t
 | Midnight Orrery | Three swinging pendulums, an orbital underpass and two ramp jumps across open gaps | Celesta, bass clarinet and viola in a clockwork ostinato |
 | Tideglass Conservatory | A botanical glasshouse with a winding half-pipe and twin sea-glass sluices | Alto flute and nylon-string guitar in a bossa nova |
 | Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
+| Crux Mountain Masters | A two-minute-plus climbing gym race with bouldering volumes, alternating slopes and four timed checkpoints | “Chalk & Gravity,” an original 128-second mallet, electric keys, bass and percussion score |
 
 Each track has its own instrumental loop. The music sits underneath the rolling marbles, starting gate and finish bell. The speaker button mutes or restores the full mix.
 
-Choose **Race again** to keep the field and draw a fresh starting grid. The results show finish times, gaps and points. First place earns 3 points, second earns 2 and third earns 1. **Standings** keeps total points and wins across all tracks for each name and color in this browser. Earlier releases saved only the winner of each race, so each recorded win carries forward as 3 points.
+On Crux, choose **Knockout** to cut the last racer across each elimination checkpoint until two finalists remain. Smaller fields start the cuts later. Choose **Endurance** to take the entire field through all four timing gates. Open **Checkpoint leaders** on the results screen to see who led at each gate and when they crossed.
+
+Choose **Race again** to keep the field and draw a fresh starting grid. The results show finish times, gaps, checkpoint eliminations and points. First place earns 3 points, second earns 2 and third earns 1. **Standings** keeps total points and wins across all tracks for each name and color in this browser. Earlier releases saved only the winner of each race, so each recorded win carries forward as 3 points.
 
 ## Development
 
@@ -29,6 +32,6 @@ npm ci
 npm run dev
 ```
 
-`npm run build` type-checks the project and produces the GitHub Pages site. `npm run test:physics` exercises all five field sizes on every course headlessly in Rapier. See [AGENTS.md](AGENTS.md) for browser tests and local audio generation, and [ROADMAP.md](ROADMAP.md) for course designs and release criteria.
+`npm run build` type-checks the project and produces the GitHub Pages site. `npm run test:physics` exercises all five field sizes on every course headlessly in Rapier, including both Crux formats. See [AGENTS.md](AGENTS.md) for browser tests and local audio generation, and [ROADMAP.md](ROADMAP.md) for course designs and release criteria.
 
-Built with Three.js, Rapier, TypeScript and Vite. The game bundles its ElevenLabs music and sound effects. Sound begins with player interaction.
+Built with Three.js, Rapier, TypeScript and Vite. The game bundles its locally composed Crux score and its ElevenLabs music and effects. Sound begins with player interaction.

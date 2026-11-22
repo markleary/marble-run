@@ -1,11 +1,15 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { CourseTrack, CourseSurface } from './track';
 import { attachOrreryDrive } from './orreryDrive';
+import type { CruxFormat } from './courses/cruxCheckpoints';
+import { createCruxCompetition } from './cruxCompetition';
+import { crossingTime } from './raceTiming';
 
 export const FIXED_DT = 1 / 60;
 const GRAVITY = 5.4;
 const STALL_SECONDS = 10;
 const MAX_HEAT_SECONDS = 120;
+const CRUX_MAX_HEAT_SECONDS = 240;
 
 let initialization: Promise<void> | undefined;
 export function initPhysics(): Promise<void> {
@@ -27,6 +31,7 @@ export interface MarbleState {
   progress: number;
   speed: number;
   finishTime: number | null;
+  cutAt?: number;
 }
 
 export interface Impact {
@@ -69,11 +74,12 @@ export class RaceSimulation {
   private readonly finishLine: ReturnType<CourseTrack['sample']>;
   private readonly impacts: Impact[] = [];
   private readonly advanceDrive?: (seconds: number) => void;
+  readonly competition?: ReturnType<typeof createCruxCompetition>;
   private tick = 0;
   private racing = false;
   private disposed = false;
 
-  constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number) {
+  constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number, format: CruxFormat = 'endurance') {
     if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > track.laneCount) {
       throw new RangeError('A race requires between 2 and ' + track.laneCount + ' marbles.');
     }
@@ -102,6 +108,7 @@ export class RaceSimulation {
     }
     if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
     this.finishLine = track.sample(track.finishS);
+    if (track.id === 'crux') this.competition = createCruxCompetition(track, entrantCount, format);
     const random = seededRandom(seed);
     const slots = startingSlots(track.laneCount, random);
     this.marbles = Array.from({ length: entrantCount }, (_, id) => {
@@ -136,6 +143,7 @@ export class RaceSimulation {
   }
 
   rollingSurface(marble: MarbleState, contact: 'any' | 'support' = 'any'): CourseSurface | undefined {
+    if (marble.cutAt !== undefined) return undefined;
     const ball = this.bodies[marble.id].collider(0);
     const preferred = this.track.surfaceAt(marble.distance);
     let result: CourseSurface | undefined;
@@ -163,6 +171,7 @@ export class RaceSimulation {
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
+    this.competition?.step(this.marbles, this.elapsed, FIXED_DT, this.withdraw);
     this.events.drainContactForceEvents(event => {
       const id = this.idByCollider.get(event.collider1()) ?? this.idByCollider.get(event.collider2());
       if (id === undefined || this.elapsed - this.lastImpact[id] < 0.12) return;
@@ -171,7 +180,7 @@ export class RaceSimulation {
       this.lastImpact[id] = this.elapsed;
       this.impacts.push({ id, strength: Math.min(1, impulse / 4) });
     });
-    this.finished = this.marbles.every(marble => marble.finishTime !== null);
+    this.finished = this.marbles.every(marble => marble.finishTime !== null || marble.cutAt !== undefined);
     return this.impacts;
   }
 
@@ -184,6 +193,7 @@ export class RaceSimulation {
 
   private syncBodies(): void {
     for (const marble of this.marbles) {
+      if (marble.cutAt !== undefined) continue;
       const body = this.bodies[marble.id];
       marble.previousPosition = marble.position;
       marble.previousRotation = marble.rotation;
@@ -195,21 +205,24 @@ export class RaceSimulation {
     }
   }
 
+  private withdraw = (id: number) => {
+    const body = this.bodies[id];
+    this.idByCollider.delete(body.collider(0).handle);
+    this.world.removeRigidBody(body);
+  };
+
   private updateProgress(marble: MarbleState) {
     const { track, finishLine } = this;
     const p = marble.position;
-    const previous = marble.previousPosition;
     const nearest = track.locate(p.x, p.z, marble.distance, p.y);
     marble.distance = nearest.s;
     marble.progress = Math.max(0, Math.min(1, (nearest.s - track.startS) / (track.finishS - track.startS)));
 
     // Count the leading edge of the sphere at the finish, even when two racers cross in one tick.
     if (nearest.s >= track.finishS - track.radius * 2 && Math.abs(nearest.lateral) <= track.halfWidth) {
-      const from = (previous.x - finishLine.x) * finishLine.tx
-        + (previous.z - finishLine.z) * finishLine.tz + track.radius;
-      const to = (p.x - finishLine.x) * finishLine.tx + (p.z - finishLine.z) * finishLine.tz + track.radius;
-      if (from <= 0 && to >= 0 && to > from) {
-        marble.finishTime = this.elapsed - FIXED_DT + FIXED_DT * (-from / (to - from));
+      const time = crossingTime(marble, finishLine, track.radius, this.elapsed, FIXED_DT);
+      if (time !== null) {
+        marble.finishTime = time;
         marble.progress = 1;
         return;
       }
@@ -223,7 +236,7 @@ export class RaceSimulation {
     if (Math.abs(nearest.lateral) > track.halfWidth + track.radius * 2
         || p.y < track.sample(nearest.s, nearest.lateral).y - 2 * track.radius) {
       this.failure = 'A marble left the course.';
-    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > MAX_HEAT_SECONDS) {
+    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > (track.id === 'crux' ? CRUX_MAX_HEAT_SECONDS : MAX_HEAT_SECONDS)) {
       this.failure = 'A marble stopped before the finish.';
     }
   }

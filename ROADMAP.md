@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All seven courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All eight courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -11,6 +11,7 @@ All seven courses support two to six named racers and use fixed, pre-generated l
 | Midnight Orrery | Playable | Tabletop observatory | Pendulum gallery, orbital underpass and two Comet Skips jumps | 51–78 seconds |
 | Tideglass Conservatory | Playable | Coastal botanical glasshouse | Standing-wave half-pipe and twin molded sluices | 54–68 seconds |
 | Kepler Relay | Playable | Orbital communications station | Gravity dive and ballistic transfer from alloy to aurora glass | At least 60 seconds to first place |
+| Crux Mountain Masters | Playable | Indoor climbing competition | Bouldering volumes, counter-banked slabs and four knockout checkpoints | Winners in 126–134 seconds |
 
 ## Prism Speedway
 
@@ -70,10 +71,20 @@ Six launch channels feed the Solar Array Esses. After the banked Magnetosphere t
 
 All 500 seeded heats finished. Winners crossed in 63.72–70.01 seconds, and the final marble crossed in 65.20–76.98 seconds. All 2,000 marbles landed after 2.63–3.72 seconds airborne. Every starting slot won at every field size. Across the same 100 six-marble grids, median forward speed at the exit of Orbital Return rose from 2.73 to 6.78 units per second. One of the 600 marbles touched a vertical guard in the bends, down from 589 on the original receiver.
 
+## Crux Mountain Masters
+
+The 458-unit layout starts high above the climbing mats in six grooved lanes. Chalk Turn opens into Volume Alley, where three pairs of brightly painted, asymmetrical climbing volumes send marbles around their feet or over their faces. Beyond the Ribbon Traverse and Highball Bend, four tilted slabs alternate which rail sits lowest. Compass Turn and the Final Traverse feed Summit Hook and the timber runout. Plywood climbing walls, holds, belay ropes and the checkpoint gantries frame the descending terraces. The original score “Chalk & Gravity” runs for 64 bars at 120 BPM.
+
+**Race formats.** Four gantries time the leading edge of each marble. In a six-racer knockout, the last crossing at each gate removes that marble from the race. Smaller fields use the last gates for cuts, so two finalists always contest the stripe. A two-marble field gets four timed splits. Endurance keeps the whole field racing. The HUD announces checkpoint leaders and cuts. Results show the finishers, the checkpoint where each eliminated racer went out, and the four leading splits. The standard podium points apply to the resulting order.
+
+**Cameras and acceptance.** Follow the shuffled gate release, frame the diamond faces in Volume Alley and show the changing crossfall through Slab Switches. The bend cameras follow the leading pack around the outside, and switch to the next active racer after the leader finishes. Verify the checkpoint signs and selected marble in portrait and landscape. In both formats run 100 seeds at each field size. Every winner must take at least 120 seconds from release. Verify the order of same-tick crossings, all four checkpoint fields, the two knockout finalists and the global standings after a rematch.
+
+All 500 Endurance heats and 500 Knockout heats finished. Winning times ranged from 125.83 to 133.99 seconds, and the last Endurance racer crossed in 131.11–148.93 seconds. Every starting slot won at every field size in both formats. Full fields cleared each section from rest. With six racers and seed 1, each marble rode onto a climbing volume and traversed at least 5.37 units of the eight-unit slab width.
+
 ## Adding courses to the game
 
 1. Register each playable course in the setup catalog. Give it a reproducible layout seed, preview, material sections, camera shots and finish plane.
 2. Reuse shared track sampling, collision construction, gates, finish detection and timing. Keep branches and layered paths explicit in their course data.
 3. Add the new course to the no-render physics runner. Run at least 100 seeded grids at every field size from two to six. Preserve failing seeds and report durations, escapes, stalls and win rates per starting slot.
 4. Play a complete heat and rematch through the browser UI with a custom name and color for every entrant. Verify those identities in the live order, results and saved standings. Check desktop and phone layouts, the optional race marker, each signature camera shot and sound on/off. Include close finishes and a split pack in camera reviews.
-5. Keep points and wins global by color and normalized name. Once every entrant finishes, award 3 points for first place, 2 for second and 1 for third. Fourth through sixth earn zero. Record each completed heat once, and keep old winner-only records worth 3 points per win. A rematch reuses the selected course and entrants and shuffles the starting slots. Smoke-test the shipped GitHub Pages build on its repository subpath.
+5. Keep points and wins global by color and normalized name. Once every entrant finishes or is eliminated, award 3 points for first place, 2 for second and 1 for third. Fourth through sixth earn zero. Record each completed heat once, and keep old winner-only records worth 3 points per win. A rematch reuses the selected course, format and entrants and shuffles the starting slots. Smoke-test the shipped GitHub Pages build on its repository subpath.

@@ -4,6 +4,8 @@ import { RaceSound } from './sound';
 import type { CourseId } from './courses/catalog';
 import type { RaceBroadcast } from './broadcast';
 import type { RaceSimulation } from './simulation';
+import type { CruxFormat } from './courses/cruxCheckpoints';
+import { compareRacePosition } from './raceTiming';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const sound = new RaceSound();
@@ -11,7 +13,7 @@ let heat: RaceSimulation | undefined;
 let broadcast: RaceBroadcast | undefined;
 let entrants: Racer[] = [];
 let racingState: 'setup' | 'countdown' | 'race' | 'results' | 'failure' = 'setup';
-let stageHeat: ((field: Racer[]) => void) | undefined;
+let stageHeat: ((field: Racer[], format: CruxFormat) => void) | undefined;
 let previewDirty = true;
 let countdownRemaining = 0;
 let accumulator = 0;
@@ -25,9 +27,9 @@ let selectedCourse: CourseId = 'prism';
 let changeCourse: ((id: CourseId) => void) | undefined;
 
 const ui = createUI(document.querySelector('#ui')!, {
-  onStart(field) {
+  onStart(field, format) {
     sound.unlock();
-    stageHeat?.(field);
+    stageHeat?.(field, format);
   },
   onSetup() {
     racingState = 'setup';
@@ -55,10 +57,8 @@ sound.enable(ui.soundEnabled());
 
 function ordered(): RaceRow[] {
   if (!heat) return [];
-  return [...heat.marbles].sort((a, b) => {
-    if (a.finishTime !== null || b.finishTime !== null) return (a.finishTime ?? Infinity) - (b.finishTime ?? Infinity);
-    return b.distance - a.distance;
-  }).map(m => ({ id: entrants[m.id].id, finishTime: m.finishTime }));
+  return [...heat.marbles].sort(compareRacePosition)
+    .map(m => ({ id: entrants[m.id].id, finishTime: m.finishTime, cutAt: m.cutAt }));
 }
 
 function announceProblem(message: string) {
@@ -85,16 +85,16 @@ async function boot() {
   broadcast.entrants(ui.previewRacers());
   broadcast.update([], 1, 1, 0);
   await initPhysics();
-  stageHeat = (field) => {
+  stageHeat = (field, format) => {
     heat?.dispose(); sound.stopRolling();
     entrants = field;
-    heat = new RaceSimulation(track, entrants.length, crypto.getRandomValues(new Uint32Array(1))[0]);
+    heat = new RaceSimulation(track, entrants.length, crypto.getRandomValues(new Uint32Array(1))[0], format);
     sound.startMusic(track.id);
     broadcast!.entrants(entrants);
     countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastHUD = -1;
     racingState = 'countdown';
     ui.showCountdown(3); broadcast!.grid();
-    ui.updateRace(0, ordered());
+    ui.updateRace(0, ordered(), heat.competition?.gates);
     lastTimestamp = 0;
   };
   ui.setReady(true);
@@ -142,10 +142,10 @@ async function boot() {
       }
       if (heat.finished) {
         racingState = 'results'; settling = 2;
-        ui.showResults(ordered()); sound.stopRolling(); sound.stopMusic(); broadcast!.podium();
+        ui.showResults(ordered(), heat.competition?.gates); sound.stopRolling(); sound.stopMusic(); broadcast!.podium();
       } else if (heat.elapsed - lastHUD >= 0.08) {
-        lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered());
-        const active = heat.marbles.filter(m => m.finishTime === null);
+        lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered(), heat.competition?.gates);
+        const active = heat.marbles.filter(m => m.finishTime === null && !m.cutAt);
         const surfaces = { lacquer: 0, wood: 0, ice: 0, wire: 0, glass: 0, alloy: 0 };
         let rolling = 0, speed = 0;
         for (const marble of active) {
