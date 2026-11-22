@@ -64,6 +64,16 @@ async function capture(name) {
   await page.screenshot({ path: resolve(output, name + '.png'), scale: 'css' });
 }
 
+async function assertCompactOrder(count) {
+  const rows = await page.locator('.running-order li').evaluateAll(items => items.map(item => ({
+    visible: item.getClientRects().length > 0,
+    marked: item.hasAttribute('data-marked')
+  })));
+  assert.equal(rows.length, count);
+  assert.equal(rows.filter(row => row.marked).length, 1);
+  rows.forEach((row, index) => assert.equal(row.visible, index === 0 || row.marked));
+}
+
 function clock(seconds) {
   const hundredths = Math.round(seconds * 100);
   const remainder = (hundredths % 6000) / 100;
@@ -219,6 +229,11 @@ try {
     assert.equal(new URL(manifest.start_url, manifestUrl).href, game);
     assert.equal(new URL(manifest.scope, manifestUrl).href, game);
     assert.equal(manifest.display, 'standalone');
+    if (engine === chromium) {
+      const session = await page.context().newCDPSession(page);
+      assert.equal((await session.send('Page.getAppId')).appId, game);
+      await session.detach();
+    }
     await page.context().setOffline(true);
     await page.reload();
   }
@@ -298,16 +313,6 @@ try {
   await assertRacers('.running-order', entrants.slice(0, fieldSize));
   await assertMarked('.running-order', marked);
   await capture('racing');
-  if (mobile) {
-    await page.setViewportSize({ width: portrait.height, height: portrait.width });
-    const fullOrder = page.getByRole('button', { name: 'Full running order' });
-    await fullOrder.tap();
-    assert.equal(await fullOrder.getAttribute('aria-expanded'), 'true');
-    assert.equal(await page.locator('.running-order li:visible').count(), fieldSize);
-    await capture('landscape-racing');
-    await fullOrder.tap();
-    await page.setViewportSize(portrait);
-  }
   const tally = () => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('marble-run:finish:v1:')).length);
   assert.equal(await tally(), 0);
   await page.getByRole('button', { name: 'Restart' }).click();
@@ -335,6 +340,18 @@ try {
   await capture('frostline-setup');
   await startButton.click();
   await page.waitForSelector('body[data-view="race"]', { timeout: 30000, state: 'attached' });
+  if (mobile) {
+    await assertCompactOrder(frostField);
+    await page.setViewportSize({ width: portrait.height, height: portrait.width });
+    const fullOrder = page.getByRole('button', { name: 'Full running order' });
+    await fullOrder.tap();
+    assert.equal(await fullOrder.getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('.running-order li:visible').count(), frostField);
+    await capture('landscape-racing');
+    await fullOrder.tap();
+    await assertCompactOrder(frostField);
+    await page.setViewportSize(portrait);
+  }
   await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:26.00', undefined, { timeout: 60000 });
   await assertRacers('.running-order', entrants.slice(0, frostField));
   await capture('frostline-racing');
