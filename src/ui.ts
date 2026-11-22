@@ -375,19 +375,21 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   function updateCheckpoint(seconds: number, gates?: readonly RaceCheckpoint[]) {
     checkpointStatus.hidden = !gates;
     if (!gates) return;
-    const next = gates.find(gate => gate.cut && gate.releasedAt === null);
-    const split = gates.find(gate => gate.arrivals.length < gate.field);
-    let message = next ? next.name + ' · ' + (next.field - 1) + ' places'
-      : split ? split.name + ' · Open gate' : 'Final stretch';
+    const next = gates.find(gate => gate.arrivals.length < gate.field);
+    const loading = gates.find(gate => gate.phase === 'loading');
     const released = gates.find(gate => gate.releasedAt !== null && seconds - gate.releasedAt < 3);
-    if (next?.phase === 'loading') {
-      const last = next.arrivals[next.field - 1];
-      message = next.name + ' · ' + (last ? racers[last.id].name + ' out'
-        : Math.min(next.field - 1, next.arrivals.length) + '/' + (next.field - 1) + ' qualified');
+    const split = gates.find(gate => !gate.cut && gate.arrivals[0] && seconds - gate.arrivals[0].time < 3);
+    let message = 'Final stretch';
+    if (loading) {
+      const last = loading.arrivals[loading.field - 1];
+      message = loading.name + ' · ' + (last ? racers[last.id].name + ' out'
+        : loading.arrivals.length + '/' + (loading.field - 1) + ' qualified');
     } else if (released) {
       message = released.name + ' · ' + (released.field - 1) + ' released · ' + racers[released.arrivals[released.field - 1].id].name + ' out';
-    } else if (!next && split?.arrivals[0]) {
+    } else if (split) {
       message = split.name + ' · ' + racers[split.arrivals[0].id].name + ' leads';
+    } else if (next) {
+      message = next.name + ' · ' + (next.cut ? (next.field - 1) + ' places' : 'Open gate');
     }
     if (checkpointStatus.textContent !== message) checkpointStatus.textContent = message;
   }

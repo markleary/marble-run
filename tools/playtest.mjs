@@ -409,6 +409,14 @@ try {
     ]],
   ]) {
     await trackButton(title).click();
+    if (id === 'crux') {
+      // With three entrants the first three stations record open splits before the cut at CP 4.
+      await fieldButton(3).click();
+      await startButton.click();
+      await page.getByText('CP 1 · Open gate', { exact: true }).waitFor();
+      await page.getByText(/^CP 1 · .+ leads$/).waitFor({ timeout: 90000 });
+      await page.reload();
+    }
     await fieldButton(6).click();
     await marker.selectOption('5');
     // Cover both booting a saved course and changing physics/audio in the same session.
