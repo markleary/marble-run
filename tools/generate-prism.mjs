@@ -29,12 +29,14 @@ const sections = ['Launch Ramp', 'Prism Rollers', 'Spectrum Hairpin', 'Return St
 const manifest = {
   seed,
   origin: { x: -12, z: -2 * radius, angle: 0 },
-  halfWidth: 2.64,
+  laneCount: 6,
+  halfWidth: 3.96,
   startS: 1.1,
   finishS: length - 4.25,
   runs, sections,
   curveRadius: radius,
   rollerPitch,
+  launchTrims: [0.30, 0.07, -0.04, -0.03, -0.02, 0.19],
   banks: { first: -0.09, second: 0.27, launchTilt: 0.27, launchFlare: 0.80, launchGrooveDepth: 0.068, launchGrooveWidth: 0.26, launchShoulder: 0.175 },
 }
 await writeFile(new URL('../src/courses/prism-layout.json', import.meta.url), JSON.stringify(manifest, null, 2) + '\n')

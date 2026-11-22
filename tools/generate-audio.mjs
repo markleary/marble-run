@@ -7,6 +7,7 @@ const clips = [
   ['gate', 1.1, false, 'One crisp mechanical release of a miniature spring-loaded metal starting gate on a wooden toy race track. A quick click-clack then silence. Close microphone, dry foley.'],
   ['roll-lacquer', 4, true, 'Close dry foley of one small solid glass marble steadily rolling over a smooth lacquered wooden toy track. A delicate continuous low rasp with a clear fine spinning whirr. Uniform throughout.'],
   ['roll-timber', 4, true, 'Tiny glass marble rolling steadily over bare maple planks with very fine wood grain. Soft warm woody rolling rumble with little grain texture. Uniform continuous sound.'],
+  ['roll-ice', 4, true, 'Close foley of a glass marble gliding smoothly over a clear frozen ice rink, a light fine crystalline sliding hiss and soft rolling whirr with steady pitch. Quiet, continuous and uniform throughout for a small tabletop racing game. No impacts, cracking, wind, music or voices.'],
   ['contact', 0.6, false, 'Two small hard glass marbles tapping against each other once. A short bright glass tick with immediate onset in a quiet room.'],
   ['bell', 1.7, false, 'Single light tap on a small brass counter bell at a tabletop marble race. A sweet clear high ding with a short natural decay.']
 ];

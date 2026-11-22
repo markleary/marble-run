@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { PrismTrack } from './track';
+import type { CourseTrack } from './track';
 
 export const FIXED_DT = 1 / 60;
 const GRAVITY = 5.4;
@@ -43,8 +43,8 @@ function seededRandom(seed: number) {
   };
 }
 
-function startingSlots(random: () => number): number[] {
-  const slots = [0, 1, 2, 3];
+function startingSlots(count: number, random: () => number): number[] {
+  const slots = Array.from({ length: count }, (_, index) => index);
   for (let i = slots.length - 1; i > 0; i--) {
     const other = Math.floor(random() * (i + 1));
     [slots[i], slots[other]] = [slots[other], slots[i]];
@@ -64,30 +64,47 @@ export class RaceSimulation {
   private readonly idByCollider = new Map<number, number>();
   private readonly checkpoints: { distance: number; time: number }[] = [];
   private readonly lastImpact: number[] = [];
-  private readonly finishLine: ReturnType<PrismTrack['sample']>;
+  private readonly finishLine: ReturnType<CourseTrack['sample']>;
   private readonly impacts: Impact[] = [];
   private tick = 0;
   private racing = false;
   private disposed = false;
 
-  constructor(private readonly track: PrismTrack, entrantCount: number, readonly seed: number) {
-    if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > 4) {
-      throw new RangeError('A race requires two to four marbles.');
+  constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number) {
+    if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > track.laneCount) {
+      throw new RangeError('A race requires between 2 and ' + track.laneCount + ' marbles.');
     }
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     this.world.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
-    const course = RAPIER.ColliderDesc.trimesh(
-      track.collision.vertices, track.collision.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES,
-    ).setFriction(0.42).setRestitution(0.08);
-    this.world.createCollider(course);
+    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42 };
+    for (const mesh of track.collisions) {
+      const collider = RAPIER.ColliderDesc.trimesh(
+        mesh.vertices, mesh.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES,
+      ).setFriction(friction[mesh.surface]).setRestitution(0.08);
+      if (mesh.surface === 'ice') collider.setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min);
+      this.world.createCollider(collider);
+    }
+    for (const peg of track.deflectors) {
+      const floor = track.sample(peg.s, peg.lateral);
+      // Extend the peg below the banked floor. The rounded shape adds its bevel
+      // to both the core radius and its half-height.
+      const buried = peg.radius * 0.6;
+      const halfHeight = (peg.height + buried) / 2;
+      const bevel = Math.min(0.08, peg.radius / 3, halfHeight / 3);
+      const collider = RAPIER.ColliderDesc.roundCylinder(halfHeight - bevel, peg.radius - bevel, bevel)
+        .setTranslation(floor.x, floor.y + halfHeight - buried, floor.z)
+        .setFriction(0.22).setRestitution(0.28);
+      this.world.createCollider(collider);
+    }
     this.finishLine = track.sample(track.finishS);
     const random = seededRandom(seed);
-    const slots = startingSlots(random);
+    const slots = startingSlots(track.laneCount, random);
     this.marbles = Array.from({ length: entrantCount }, (_, id) => {
       const slot = slots[id];
       const wiggleRoom = Math.max(0, track.laneWidth / 2 - track.radius - 0.06);
-      const lateral = (slot - 1.5) * track.laneWidth + (2 * random() - 1) * wiggleRoom;
+      const laneCenter = (slot + 0.5) * track.laneWidth - track.halfWidth;
+      const lateral = laneCenter + (2 * random() - 1) * wiggleRoom;
       const floor = track.sample(track.startS, lateral);
       const position = { x: floor.x, y: floor.y + track.radius + 0.01, z: floor.z };
       const yaw = random() * Math.PI;

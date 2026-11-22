@@ -1,4 +1,4 @@
-const clips = ['gate', 'roll-lacquer', 'roll-timber', 'contact', 'bell'] as const;
+const clips = ['gate', 'roll-lacquer', 'roll-timber', 'roll-ice', 'contact', 'bell'] as const;
 type Clip = typeof clips[number];
 
 export class RaceSound {
@@ -48,11 +48,11 @@ export class RaceSound {
     source.start();
   }
 
-  rolling(speed: number, wood: number) {
+  rolling(speed: number, wood: number, ice: number) {
     const context = this.context;
     if (!context || !this.output || !this.enabled || speed < 0.02) { this.stopRolling(); return; }
     if (!this.loops.length) {
-      const buffers = [this.buffers.get('roll-lacquer'), this.buffers.get('roll-timber')];
+      const buffers = [this.buffers.get('roll-lacquer'), this.buffers.get('roll-timber'), this.buffers.get('roll-ice')];
       if (!buffers.every(Boolean)) return;
       for (const buffer of buffers) {
         const source = context.createBufferSource();
@@ -65,8 +65,9 @@ export class RaceSound {
         this.loops.push({ source, gain });
       }
     }
+    const blend = [Math.max(0, 1 - wood - ice), wood, ice];
     this.loops.forEach(({ source, gain }, index) => {
-      gain.gain.setTargetAtTime((index ? wood : 1 - wood) * Math.min(0.4, speed * 0.1), context.currentTime, 0.15);
+      gain.gain.setTargetAtTime(blend[index] * Math.min(0.4, speed * 0.1), context.currentTime, 0.15);
       source.playbackRate.setTargetAtTime(Math.min(1.8, 0.65 + speed * 0.16), context.currentTime, 0.12);
     });
   }

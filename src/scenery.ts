@@ -1,157 +1,16 @@
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import type { PrismTrack, TrackSample } from './track'
+import type { CourseTrack, TrackSample } from './track'
+import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
+import { createFrostlineScenery } from './frostlineScenery'
 
-const LANES = ['#e21e46', '#ff9400', '#00a58f', '#075dca']
-type Material = THREE.MeshStandardMaterial
-type Point = { x: number; y: number; z: number }
-const axisY = new THREE.Vector3(0, 1, 0)
-const lifted = (p: Point, lift: number) => new THREE.Vector3(p.x, p.y + lift, p.z)
+const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
-function material(color: THREE.ColorRepresentation, roughness = 0.48, metalness = 0.06) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness, side: THREE.DoubleSide })
+export function createCourseScenery(track: CourseTrack): THREE.Group {
+  return track.id === 'frostline' ? createFrostlineScenery(track) : createPrismScenery(track)
 }
 
-function canvasTexture(width: number, height: number, paint: (ctx: CanvasRenderingContext2D) => void) {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')!
-  paint(ctx)
-  const map = new THREE.CanvasTexture(canvas)
-  map.colorSpace = THREE.SRGBColorSpace
-  map.anisotropy = 4
-  return map
-}
-
-function woodTexture() {
-  const map = canvasTexture(512, 256, ctx => {
-    let seed = 721
-    const noise = () => {
-      seed = (Math.imul(1664525, seed) + 1013904223) >>> 0
-      return seed / 0x100000000
-    }
-    ctx.fillStyle = '#dfae71'
-    ctx.fillRect(0, 0, 512, 256)
-    for (let i = 0; i < 1800; i++) {
-      const y = noise() * 260 - 2
-      const x = noise() * 512
-      const len = 8 + noise() ** 2 * 210
-      const wave = noise() * 3 - 1.5
-      ctx.strokeStyle = noise() < 0.57 ? 'rgba(86,41,17,.095)' : 'rgba(255,242,193,.21)'
-      ctx.lineWidth = 0.35 + noise() * 1.0
-      for (const offset of [-512, 0]) {
-        ctx.beginPath()
-        ctx.moveTo(x + offset, y)
-        ctx.bezierCurveTo(x + len * 0.3 + offset, y - wave, x + len * 0.72 + offset, y + wave, x + len + offset, y)
-        ctx.stroke()
-      }
-    }
-  })
-  map.wrapS = map.wrapT = THREE.RepeatWrapping
-  return map
-}
-
-function signTexture(label: string, mode: 'start' | 'finish' | 'course') {
-  return canvasTexture(1024, 160, ctx => {
-    ctx.fillStyle = mode === 'course' ? '#ecdfca' : '#242e30'
-    ctx.fillRect(0, 0, 1024, 160)
-    if (mode === 'course') {
-      const colors = ['#f85060', '#ffb32c', '#20b5a5', '#367ee9']
-      ctx.transform(1, 0, -0.28, 1, 0, 0)
-      colors.forEach((c, i) => {
-        ctx.fillStyle = c
-        ctx.fillRect(37 + i * 26, 30, 22, 100)
-      })
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.fillStyle = '#202a2c'
-      ctx.font = '900 93px Arial, sans-serif'
-      ctx.textAlign = 'left'
-      ctx.fillText(label, 152, 112, 838)
-    } else {
-      ctx.fillStyle = '#fff6e7'
-      ctx.font = '900 93px Arial, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText(label, 512, 115)
-      if (mode === 'finish') {
-        for (const startX of [32, 824]) {
-          for (let row = 0; row < 3; row++) for (let col = 0; col < 5; col++) {
-            if ((row + col) % 2 === 0) ctx.fillRect(startX + 32 * col, 32 + row * 32, 32, 32)
-          }
-        }
-      } else {
-        for (const [i, color] of LANES.entries()) {
-          ctx.fillStyle = color
-          ctx.fillRect(37 + i * 37, 59, 29, 39)
-          ctx.fillRect(852 + i * 37, 59, 29, 39)
-        }
-      }
-    }
-  })
-}
-
-/** Static geometry is merged by finish, so all support hardware shares a few draws. */
-class SceneryBatch {
-  private readonly buckets = new Map<Material, THREE.BufferGeometry[]>()
-  add(mat: Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4) {
-    if (matrix) geo.applyMatrix4(matrix)
-    if (!geo.getAttribute('normal')) geo.computeVertexNormals()
-    const normalized = geo.index ? geo.toNonIndexed() : geo
-    if (normalized !== geo) geo.dispose()
-    let bucket = this.buckets.get(mat)
-    if (!bucket) this.buckets.set(mat, bucket = [])
-    bucket.push(normalized)
-  }
-  box(mat: Material, center: THREE.Vector3, size: [number, number, number], rotation = 0) {
-    const transform = new THREE.Matrix4().makeRotationY(rotation).setPosition(center)
-    this.add(mat, new THREE.BoxGeometry(...size), transform)
-  }
-  rod(mat: Material, a: THREE.Vector3, b: THREE.Vector3, radius: number, sides = 8) {
-    const delta = new THREE.Vector3().subVectors(b, a)
-    const geometry = new THREE.CylinderGeometry(radius, radius, delta.length(), sides)
-    const midpoint = a.clone().lerp(b, 0.5)
-    const rotation = new THREE.Quaternion().setFromUnitVectors(axisY, delta.normalize())
-    this.add(mat, geometry, new THREE.Matrix4().compose(midpoint, rotation, new THREE.Vector3(1, 1, 1)))
-  }
-  surface(mat: Material, start: number, end: number, get: (s: number, t: number) => Point, width: number, bands = 1) {
-    const vertices: number[] = [], uvs: number[] = [], indices: number[] = []
-    const rows = Math.max(1, Math.ceil((end - start) / .32))
-    const columns = bands + 1
-    for (let i = 0; i <= rows; i++) {
-      const s = start + (end - start) * i / rows
-      for (let j = 0; j <= bands; j++) {
-        const t = j / bands
-        const p = get(s, t)
-        vertices.push(p.x, p.y, p.z)
-        uvs.push(s / 4, t * width / 1.6)
-        if (i === 0 || j === 0) continue
-        const a = (i - 1) * columns + j - 1
-        indices.push(a, a + 1, a + columns, a + 1, a + columns + 1, a + columns)
-      }
-    }
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
-    geometry.setIndex(indices)
-    this.add(mat, geometry)
-  }
-  strip(mat: Material, start: number, end: number, get: (s: number, side: 0 | 1) => Point, width: number) {
-    this.surface(mat, start, end, (s, t) => get(s, t === 0 ? 0 : 1), width)
-  }
-  finish(group: THREE.Group) {
-    for (const [mat, parts] of this.buckets) {
-      const merged = mergeGeometries(parts)
-      for (const part of parts) part.dispose()
-      const mesh = new THREE.Mesh(merged, mat)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      group.add(mesh)
-    }
-  }
-}
-
-export function createPrismScenery(track: PrismTrack): THREE.Group {
+function createPrismScenery(track: CourseTrack): THREE.Group {
   const group = new THREE.Group()
   group.name = 'Prism Speedway'
   const batch = new SceneryBatch()
@@ -171,7 +30,7 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
   const ply = material('#e2b989', 0.55)
   const darkPly = material('#9a7352', 0.52)
   const colorLanes = LANES.map(color => material(color, 0.27, 0.12))
-  const edgeColors = ['#b93249', '#ca7d16', '#129187', '#2560af'].map(c => material(c))
+  const edgeColors = ['#b93249', '#bd7010', '#d09e16', '#118751', '#255fab', '#6028a2'].map(c => material(c))
   const w = track.halfWidth
   const bottom = -0.34
   const sample = (s: number, l: number, dy: number) => lifted(track.sample(s, l), dy)
@@ -198,7 +57,7 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
 
   // The rainbow finishes at the second bank, exposing the shared maple racing deck.
   const timber = track.sections[4].start + 1.8
-  for (let lane = 0; lane < 4; lane++) {
+  for (let lane = 0; lane < track.laneCount; lane++) {
     const left = -w + lane * track.laneWidth
     batch.surface(colorLanes[lane], 0, timber, (s, t) =>
       track.sample(s, left + t * track.laneWidth), track.laneWidth, 10)
@@ -214,8 +73,8 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
     }
   }
 
-  // Three dividing fins taper into the timber during the merge.
-  for (let lane = 1; lane <= 3; lane++) {
+  // The dividing fins taper into the timber during the merge.
+  for (let lane = 1; lane < track.laneCount; lane++) {
     const lateral = -w + lane * track.laneWidth
     const until = track.sections[4].end
     for (const dir of [-1, 1]) {
@@ -259,9 +118,9 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
     ribbon(wood[1], 0, track.length, -w + lane * w / 4, -w + (lane + 1) * w / 4, -.39)
   }
 
-  // Four lacquered swatches inset into the wood mark the material transition.
-  for (let lane = 0; lane < 4; lane++) {
-    const center = (lane - 1.5) * track.laneWidth
+  // Lacquered swatches inset into the wood mark the material transition.
+  for (let lane = 0; lane < track.laneCount; lane++) {
+    const center = -w + (lane + .5) * track.laneWidth
     ribbon(edgeColors[lane], timber + .035, timber + .20, center - .53, center + .53, .018)
   }
 
@@ -315,22 +174,6 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
     }
   }
 
-  function signBoard(text: string, type: 'start' | 'finish' | 'course', at: THREE.Vector3, width: number, height: number, normal: THREE.Vector3) {
-    const map = signTexture(text, type)
-    const signMat = material('#ffffff', .54)
-    signMat.map = map
-    const yaw = Math.atan2(normal.x, normal.z)
-    batch.box(type === 'course' ? darkPly : gunmetal, at, [width + .12, height + .12, .09], yaw)
-    // Separate faces keep the lettering legible from both sides of the gantry.
-    for (const face of [-1, 1]) {
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(width, height), signMat)
-      sign.rotation.y = yaw + (face < 0 ? Math.PI : 0)
-      sign.position.copy(at).addScaledVector(normal, .052 * face)
-      sign.receiveShadow = true
-      group.add(sign)
-    }
-  }
-
   for (const [s, isFinish] of [[track.startS + 1.08, false], [track.finishS, true]] as const) {
     const p = track.sample(s)
     const top = p.y + 2.33
@@ -341,7 +184,7 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
       batch.rod(gunmetal, base, end, .081)
       batch.rod(caution, base.clone().lerp(end, .5), base.clone().lerp(end, .56), .084)
     }
-    signBoard(isFinish ? 'FINISH' : 'START', isFinish ? 'finish' : 'start',
+    signBoard(group, batch, gunmetal, LANES, isFinish ? 'FINISH' : 'START', isFinish ? 'finish' : 'start',
       new THREE.Vector3(p.x, top, p.z), 2 * w + .47, .78, new THREE.Vector3(p.tx, 0, p.tz))
     if (isFinish) {
       for (let col = 0; col < 16; col++) for (let row = 0; row < 2; row++) {
@@ -357,7 +200,7 @@ export function createPrismScenery(track: PrismTrack): THREE.Group {
   const plateS = track.finishS - 9
   const nearPlate = track.sample(plateS, w)
   const plateAt = outside(nearPlate, .14, -.06)
-  signBoard('PRISM SPEEDWAY', 'course', plateAt, 4.85, .71, new THREE.Vector3(nearPlate.rx, 0, nearPlate.rz))
+  signBoard(group, batch, darkPly, LANES, 'PRISM SPEEDWAY', 'course', plateAt, 4.85, .71, new THREE.Vector3(nearPlate.rx, 0, nearPlate.rz))
 
   // A bright workshop sits beyond the table. Its tall windows provide scale and a
   // horizon for the tracking cameras while keeping the racing surface uncluttered.

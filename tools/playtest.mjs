@@ -24,15 +24,19 @@ const page = await browser.newPage({
 const issues = [];
 page.on('pageerror', error => issues.push(error.message));
 page.on('response', response => { if (response.status() >= 400) issues.push(response.status() + ' ' + response.url()); });
-const fieldSize = mobile ? 2 : 4;
+const fieldSize = mobile ? 2 : 6;
+const frostField = mobile ? 5 : 6;
 const entrants = [
   { name: 'Amethyst', color: '#995bd8', label: 'Violet', livery: '4' },
   { name: 'Rose <3', color: '#e95d97', label: 'Rose', livery: '5' },
   { name: 'Blue Jay', color: '#168bd2', label: 'Azure', livery: '3' },
-  { name: 'Lucky Clover', color: '#179a74', label: 'Emerald', livery: '2' }
+  { name: 'Lucky Clover', color: '#179a74', label: 'Emerald', livery: '2' },
+  { name: 'Sol', color: '#edae17', label: 'Golden yellow', livery: '1' },
+  { name: 'Scarlet', color: '#ef442a', label: 'Vermilion', livery: '0' }
 ];
 const previousWinner = { name: 'Legacy Gold', color: '#edae17', label: 'Golden yellow' };
-const expectedWins = new Map([[previousWinner.name, 1]]);
+const expectedScores = new Map([[previousWinner.name, { wins: 1, points: 3, color: previousWinner.color }]]);
+const trackButton = name => page.getByRole('button', {name, exact: true});
 const nameInput = number => page.getByRole('textbox', { name: 'Player ' + number + ' name', exact: true });
 const colorInput = number => page.getByRole('combobox', { name: 'Player ' + number + ' color', exact: true });
 const fieldButton = size => page.getByRole('button', { name: size + ' marbles', exact: true });
@@ -62,32 +66,51 @@ async function assertSetup(size) {
   }
 }
 
-async function verifyResults() {
+async function verifyResults(track, count, marked) {
   await page.waitForSelector('body[data-view="results"]', { timeout: 150000, state: 'attached' });
-  await assertRacers('.finish-order', entrants.slice(0, fieldSize));
-  await assertMarked('.finish-order');
-  const winner = await page.locator('.winner-card h2').textContent();
-  expectedWins.set(winner, (expectedWins.get(winner) ?? 0) + 1);
+  assert.equal(await page.locator('.result-course').innerText(), track);
+  await assertRacers('.finish-order', entrants.slice(0, count));
+  await assertMarked('.finish-order', marked);
+  const rows = await page.locator('.finish-order li').evaluateAll(items => items.map(item => ({
+    name: item.querySelector('.finish-name span:nth-child(2)').firstChild.textContent,
+    points: Number(item.querySelector('strong').textContent),
+  })));
+  rows.forEach((result, index) => {
+    const points = [3, 2, 1][index] ?? 0;
+    assert.equal(result.points, points, result.name + ' race points');
+    const score = expectedScores.get(result.name) ?? { wins: 0, points: 0, color: entrants.find(e => e.name === result.name).color };
+    score.points += points;
+    if (index === 0) score.wins++;
+    expectedScores.set(result.name, score);
+  });
 }
 
-async function assertMarked(list) {
+async function assertMarked(list, slot) {
   const markedRows = page.locator(list + ' li').filter({ has: page.getByText('Marked', { exact: true }) });
   assert.equal(await markedRows.count(), 1);
-  assert.ok((await markedRows.textContent()).includes(entrants[1].name));
+  assert.ok((await markedRows.textContent()).includes(entrants[slot].name));
 }
 try {
   await mkdir(output, { recursive: true });
   // Exercise an existing installation's first visit after the roster update.
-  await page.addInitScript(winner => {
+  await page.addInitScript(({winner, mobile}) => {
     if (sessionStorage.getItem('playtest-initialized')) return;
     localStorage.setItem('marble-run:setup:v1', JSON.stringify({ count: 3, name: 'Veteran', livery: 2 }));
+    if (mobile) {
+      localStorage.setItem('marble-run:setup:v2', JSON.stringify({
+        count: 3, marker: 2,
+        entries: [{name:'Veteran', livery:2}, {name:'Riptide', livery:3}, {name:'Sunbeam', livery:1}, {name:'Old Violet', livery:4}],
+      }));
+    }
     localStorage.setItem('marble-run:win:v1:previous-heat', JSON.stringify(winner));
     sessionStorage.setItem('playtest-initialized', '1');
-  }, previousWinner);
+  }, {winner: previousWinner, mobile});
   await page.goto(game);
   const startButton = page.getByRole('button', { name: 'Start race' });
   await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false, undefined, { timeout: 90000 });
   await page.evaluate(() => document.fonts.ready);
+  await page.getByRole('button', { name: 'Mute sound' }).click();
+  await page.getByRole('button', { name: 'Enable sound' }).click();
   assert.equal(await nameInput(1).inputValue(), 'Veteran');
   assert.equal(await colorInput(1).inputValue(), '2');
   assert.equal(await nameInput(2).inputValue(), 'Riptide');
@@ -95,12 +118,13 @@ try {
   assert.equal(await nameInput(3).inputValue(), 'Sunbeam');
   assert.equal(await colorInput(3).inputValue(), '1');
   assert.equal(await fieldButton(3).getAttribute('aria-pressed'), 'true');
-  await fieldButton(4).click();
-  for (let slot = 0; slot < 4; slot++) {
+  await fieldButton(6).click();
+  if (mobile) assert.equal(await nameInput(4).inputValue(), 'Old Violet');
+  for (let slot = 0; slot < 6; slot++) {
     await nameInput(slot + 1).fill(entrants[slot].name);
     await colorInput(slot + 1).selectOption(entrants[slot].livery);
   }
-  await assertSetup(4);
+  await assertSetup(6);
   // Two players trading colors must keep their names and the field must stay distinct.
   await colorInput(1).selectOption(entrants[1].livery);
   assert.equal(await colorInput(2).inputValue(), entrants[0].livery);
@@ -123,50 +147,70 @@ try {
   assert.equal(await nameInput(1).inputValue(), entrants[0].name);
   assert.equal(await nameInput(4).inputValue(), entrants[3].name);
   await colorInput(1).selectOption(entrants[0].livery);
-  for (const size of [2, 3, 4, fieldSize]) {
+  for (const size of [2, 3, 4, 5, 6, fieldSize]) {
     await fieldButton(size).click();
     await assertSetup(size);
   }
   await marker.selectOption('none');
   assert.equal(await marker.inputValue(), 'none');
-  await marker.selectOption('1');
-  await capture('setup');
+  const marked = fieldSize - 1;
+  await marker.selectOption(String(marked));
+  await trackButton('Frostline Rally').click();
+  await trackButton('Prism Speedway').click();
+  assert.equal(await trackButton('Prism Speedway').getAttribute('aria-pressed'), 'true');
+  await capture('prism-setup');
   console.log('Captured setup', output);
   await startButton.click();
   await page.waitForSelector('body[data-view="race"]', { timeout: 30000, state: 'attached' });
   await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:07.00');
   await assertRacers('.running-order', entrants.slice(0, fieldSize));
-  await assertMarked('.running-order');
+  await assertMarked('.running-order', marked);
   await capture('racing');
-  const tally = () => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('marble-run:win:')).length);
-  assert.equal(await tally(), 1);
+  const tally = () => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('marble-run:finish:v1:')).length);
+  assert.equal(await tally(), 0);
   await page.getByRole('button', { name: 'Restart' }).click();
   await page.waitForSelector('body[data-view="countdown"]', { state: 'attached' });
-  await verifyResults();
-  assert.equal(await tally(), 2);
-  await capture('results');
-  console.log('First complete heat', await page.locator('.finish-order').innerText());
-  await page.getByRole('button', { name: 'Race again' }).click();
-  await verifyResults();
-  assert.equal(await tally(), 3);
+  await verifyResults('Prism Speedway', fieldSize, marked);
+  assert.equal(await tally(), 1);
+  await capture('prism-results');
   await page.getByRole('button', { name: 'Change setup' }).click();
-  await assertSetup(fieldSize);
+
+  await trackButton('Frostline Rally').click();
+  await fieldButton(frostField).click();
+  await marker.selectOption(String(frostField - 1));
   await page.reload();
   await nameInput(1).waitFor();
-  await assertSetup(fieldSize);
-  assert.equal(await marker.inputValue(), '1');
-  await fieldButton(4).click();
-  await assertSetup(4);
+  assert.equal(await trackButton('Frostline Rally').getAttribute('aria-pressed'), 'true');
+  assert.equal(await marker.inputValue(), String(frostField - 1));
+  await assertSetup(frostField);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await capture('frostline-setup');
+  await startButton.click();
+  await page.waitForSelector('body[data-view="race"]', { timeout: 30000, state: 'attached' });
+  await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:26.00', undefined, { timeout: 60000 });
+  await assertRacers('.running-order', entrants.slice(0, frostField));
+  await capture('frostline-racing');
+  await verifyResults('Frostline Rally', frostField, frostField - 1);
+  await capture('frostline-results');
+  await page.getByRole('button', { name: 'Race again' }).click();
+  await verifyResults('Frostline Rally', frostField, frostField - 1);
+  assert.equal(await tally(), 3);
+  await page.getByRole('button', { name: 'Change setup' }).click();
+  await page.reload();
+  await fieldButton(6).click();
+  await assertSetup(6);
   await page.getByRole('button', { name: 'Standings' }).click();
-  const winners = [previousWinner, ...entrants].filter(entrant => expectedWins.has(entrant.name));
-  await assertRacers('.all-wins', winners);
-  for (const winner of winners) {
-    const total = await page.locator('.all-wins li').filter({ hasText: winner.name }).locator('strong').textContent();
-    assert.equal(Number(total), expectedWins.get(winner.name), winner.name + ' wins');
-  }
+  const scores = await page.locator('.scores tbody tr').evaluateAll(rows => rows.map(row => ({
+    name: row.cells[0].textContent, wins: Number(row.cells[1].textContent),
+    points: Number(row.cells[2].textContent), color: row.querySelector('.identity-dot').style.getPropertyValue('--livery').trim(),
+  })));
+  assert.equal(scores.length, expectedScores.size);
+  for (const {name, ...score} of scores) assert.deepEqual(score, expectedScores.get(name), name + ' cumulative scoring');
+  assert.deepEqual(scores.map(s => s.points), scores.map(s => s.points).sort((a,b) => b - a));
+  await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed setup, restart, two timed finishes, rematch, persistent standings and reload:', game);
+  console.log('Passed both courses, named entrants, restart, three timed heats, rematch and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));
