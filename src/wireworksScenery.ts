@@ -101,10 +101,14 @@ export function createWireworksScenery(course: CourseTrack) {
 
   // Painted steel columns and cross-braces support the elevated wire drop and the split.
   for (let s = .5, n = 0; s < track.length; s += 5.1, n++) {
-    const left = at(s, -w + .27, s < receivingDeck ? -1.04 : -.35)
-    const right = at(s, w - .27, s < receivingDeck ? -1.04 : -.35)
-    batch.rod(frame, left, right, .145)
-    for (const top of [left, right]) {
+    // Follow both deck undersides at the same physical station. A straight
+    // beam between the outer posts would cut through the bank's low inner lip.
+    const lift = s < receivingDeck ? -1.04 : -.35
+    const beam = s > forkStart && s < forkEnd
+      ? [2, 11, 17, 26].map(column => deck(s, column, lift))
+      : [at(s, -w + .27, lift), at(s, w - .27, lift)]
+    for (let i = 1; i < beam.length; i++) batch.rod(frame, beam[i - 1], beam[i], .145)
+    for (const [top, next] of [[beam[0], beam[1]], [beam.at(-1)!, beam.at(-2)!]]) {
       const foot = top.clone(); foot.y = bed
       const boltPlate = foot.clone().addScaledVector(axisY, .07)
       batch.box(blued, boltPlate, [.77, .14, .77])
@@ -113,9 +117,8 @@ export function createWireworksScenery(course: CourseTrack) {
         const bolt = boltPlate.clone().add(new THREE.Vector3(delta, .12, delta))
         batch.rod(zinc, bolt, bolt.clone().addScaledVector(axisY, .045), .07, 6)
       }
-      const other = top === left ? right : left
       if (top.y - bed > 1.5) {
-        batch.rod(frame, top.clone().addScaledVector(axisY, -1.3), top.clone().lerp(other, .23), .09)
+        batch.rod(frame, top.clone().addScaledVector(axisY, -1.3), top.clone().lerp(next, .23), .09)
       }
     }
   }

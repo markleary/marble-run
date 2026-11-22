@@ -13,9 +13,9 @@ All six courses support two to six named racers and use fixed, pre-generated lay
 
 ## Prism Speedway
 
-The six launch troughs descend over shallow rollers into the Spectrum Hairpin. The return straight feeds the opposing timber bank. The lane separators taper into the shared finishing deck, and the timing stripe sits upstream of the collection tray. A close finish uses the leading edge of the marble at the stripe. The camera follows remaining racers after the winner crosses.
+The six launch troughs descend over shallow rollers into the Spectrum Hairpin. The return straight feeds the opposing timber bank. In both turns, a marble can climb the rounded shoulder between lanes while carrying speed around the bend. The shoulders taper into the shared finishing deck, and the timing stripe sits upstream of the collection tray. A close finish uses the leading edge of the marble at the stripe. The camera follows remaining racers after the winner crosses.
 
-The wider grid keeps the original sequence of rollers, opposing banks and timber merge. Each rematch shuffles racers across the six slots, including smaller fields. Use the headless runner to compare completion, heat duration and win rates by starting slot after physics or material changes.
+Each rematch shuffles racers across the six slots, including smaller fields. With the rounded shoulders, all 500 seeded heats finished in 35.59–44.71 seconds and every slot won at every field size. In the two-marble heat with seed 1, each racer must carry at least 90% of its entry speed through the first six units of each banked turn. A single physics tick may cost at most 6% of forward speed anywhere in the turn.
 
 ## Timber Corkscrew
 
@@ -29,13 +29,13 @@ The wider grid keeps the original sequence of rollers, opposing banks and timber
 
 ## Wireworks Drop
 
-**Race sequence.** A high gate releases the field onto six chutes on paired wire rails. The rails curl downward and level out over a wooden catch deck. A broad splitter routes marbles around a support tower. The inner branch takes a short, tight line, and the outer branch takes a longer, gentler descent. Both feed a wide, banked reunion and a straight finish.
+**Race sequence.** A high gate releases the field onto six chutes on paired wire rails. The outside pairs start higher to compensate for their longer trip around the wire bend. The rails level out over a wooden catch deck before the field splits around a support tower. The lower, slate-blue branch in the landscape tower shot takes the short line. The longer aqua branch banks toward the tower so marbles carry speed around its wide sweep. Both feed a common banked turn and a straight finish.
 
 **Geometry and materials.** The twelve cylindrical rails support the marbles directly. The running surface beneath each marble meets the wooden catch deck, where the rails sink into the wood. After the deck, the fork has its own floors and guards around a central tower. Both routes return to a common racing surface before the timing stripe.
 
 **Progress and cameras.** Each branch maps its traveled distance to shared checkpoints between the split and the merge. Finish times use the marble’s physical crossing of the stripe. A side shot shows the descent. A fixed shot covers the tower and the two routes in landscape and portrait. The race audio blends in a steel-wire rattle while marbles occupy the rails.
 
-**Acceptance.** All 500 release heats finished in 34.23–45.65 seconds. Both branches won at every field size. Test isolated marbles on each route and six marbles arriving together. Check for wedging at the splitter, falling between rails, and colliding with a seam at the reunion. Sample branch use and finish order across many seeds. Tune branch geometry if one route always loses. Verify the wire rattle gives way to the timber roll on the catch deck.
+**Acceptance.** All 500 seeded heats finished in 33.84–43.29 seconds. Every starting slot and both branches won at every field size. In 100 full-field heats the slate branch led at the merge 39 times and won 53 races. For batches of at least 100 six-marble heats, at least 80% should use both routes. Within those contested heats, each branch should lead at least 30% of merges and win at least 30% of races. Test isolated marbles on each route and six arriving together. Check the splitter and reunion for trapping or seams, and verify that the wire rattle gives way to the timber roll on the catch deck.
 
 ## Frostline Rally
 

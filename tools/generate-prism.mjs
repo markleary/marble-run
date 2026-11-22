@@ -35,8 +35,9 @@ const manifest = {
   finishS: length - 4.25,
   runs, sections,
   curveRadius: radius,
+  roundedLaneDepth: 0.28,
   rollerPitch,
-  launchTrims: [0.30, 0.07, -0.04, -0.03, -0.02, 0.19],
+  launchTrims: [0.30, 0.14, -0.04, 0, 0.06, 0.19],
   banks: { first: -0.09, second: 0.27, launchTilt: 0.27, launchFlare: 0.80, launchGrooveDepth: 0.068, launchGrooveWidth: 0.26, launchShoulder: 0.175 },
 }
 await writeFile(new URL('../src/courses/prism-layout.json', import.meta.url), JSON.stringify(manifest, null, 2) + '\n')

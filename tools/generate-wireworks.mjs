@@ -38,7 +38,7 @@ const manifest = {
   finishS: length - 4.1, railGauge: .54, railRadius: .088, railEnd: ends[2],
   forkStart: ends[3], forkEnd: ends[4],
   branches: [branch(2.55 + random() * .2, .06, .85), branch(4.5 + random() * .2, 0, 1)],
-  launchTrims: [.39, .20, .04, .64, -.29, -.32],
+  gateHeightStagger: .63, outerBankRise: .65,
   sections, runs,
 }
 await writeFile(new URL('../src/courses/wireworks-layout.json', import.meta.url), JSON.stringify(manifest, null, 2) + '\n')
