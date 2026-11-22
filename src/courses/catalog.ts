@@ -15,8 +15,16 @@ export const courses = {
     title: 'Frostline Rally',
     features: ['Ice sweeper', 'Deflector field', 'Finish bridge'],
   },
+  orrery: {
+    title: 'Midnight Orrery',
+    features: ['Swinging pendulums', 'Ecliptic underpass', 'Comet jumps'],
+  },
+  tideglass: {
+    title: 'Tideglass Conservatory',
+    features: ['Sea-glass flume', 'Standing waves', 'Twin sluice'],
+  },
 } as const;
 
 export type CourseId = keyof typeof courses;
-export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks'];
+export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass'];
 export const fieldSizes = [2, 3, 4, 5, 6];

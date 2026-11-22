@@ -35,6 +35,8 @@ const scores = [
   ['timber', 100, 'Warm cabinetmaker workshop. An acoustic chamber-folk ostinato in 4/4, fingerpicked nylon guitar, pizzicato upright bass, mellow viola and warm woody marimba phrases, with a gently loping pulse as the marbles spiral.'],
   ['wireworks', 116, 'Mechanical kinetic sculpture gallery. Minimalist motorik electronica in A minor with a rubbery muted mono synth bass, soft low-pass electric organ pulses and a repeating interlocked plucked melody. Restrained machine groove, understated percussion, plenty of rhythmic space.'],
   ['frostline', 108, 'Snowy alpine rally village. Airy winter chamber score in 4/4 with felt piano, warm sustained string trio, and a lilting clarinet countermelody over plucked bass. An optimistic flowing pulse. Keep the high register very soft.'],
+  ['orrery', 112, 'Midnight Orrery, a miniature brass clockwork observatory tracing the orbits of planets. A nocturnal chamber ostinato in E minor, gentle celesta notes turning against pulsing bass clarinet, with clipped viola harmonics and a muted French horn answer. Interlock two quiet three-note patterns across a steady four-beat measure to suggest meshing gears. Curious, precise, forward-moving.'],
+  ['tideglass', 104, 'Tideglass Conservatory, a seaside glasshouse with winding aquamarine flumes and lush foliage. A breezy instrumental bossa nova in G major. A syncopated nylon-string guitar and round fretless bass carry the rhythm, a breathy alto flute plays a rising then falling phrase, soft brushed rim and shaker tucked underneath. Keep the swaying groove intimate and buoyant.'],
 ];
 // Compare short windows of the original recording to find a matching pair of bar lines.
 // Moving the exit a little allows for an imperfect generated tempo.

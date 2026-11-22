@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { Racer } from './ui';
 import type { MarbleState } from './simulation';
+import { FIXED_DT } from './simulation';
 import type { CourseTrack } from './track';
 import type { CourseId } from './courses/catalog';
-import { createCourseScenery } from './scenery';
+import { createCourseScenery, type CourseScenery } from './scenery';
 
 type Offset = [number, number, number];
 interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean }
@@ -32,13 +33,31 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [8, 5.3, -6.4] }, { offset: [13, 20, 2], portraitOffset: [0.4, 20, -8], fixed: true },
     { offset: [7.6, 7.3, 9.3], anchor: 0.12 }, { offset: [-3.4, 5.8, 9.6] },
   ],
+  orrery: [
+    { offset: [4, 6, -9], trackRelative: true },
+    { offset: [-3, 7, 9], trackRelative: true },
+    { offset: [2, 10, -11], trackRelative: true },
+    { offset: [3, 20, 14], portraitOffset: [13, 18, 1], fixed: true },
+    { offset: [3, 9, -11], trackRelative: true },
+    { offset: [9, 2.8, -3], portraitOffset: [7, 1.15, -1], trackRelative: true },
+    { offset: [1.6, 3.8, 9], trackRelative: true },
+    { offset: [4, 6, 9], trackRelative: true },
+  ],
+  tideglass: [
+    { offset: [4, 6, 9] }, { offset: [2, 8, 10] },
+    { offset: [6, 11, -9], trackRelative: true }, { offset: [4.5, 11, 8] },
+    { offset: [2, 8, 10], trackRelative: true }, { offset: [4, 10, 10] },
+    { offset: [-4, 8, 9] }, { offset: [4, 6, 10] },
+  ],
 };
 
-const settings: Record<CourseId, { sky: string; fog: string; haze: number; preview: Offset }> = {
+const settings: Record<CourseId, { sky: string; fog: string; haze: number; preview: Offset; finishApproach?: number }> = {
   prism: { sky: '#dedfd6', fog: '#e5e5db', haze: 0.006, preview: [0.57, 0.83, -1.28] },
   frostline: { sky: '#b8d8e8', fog: '#cedfe7', haze: 0.004, preview: [-0.55, 1.05, 1.35] },
   timber: { sky: '#edd5b3', fog: '#e6d4bd', haze: 0.005, preview: [0.9, 0.95, 1.2] },
   wireworks: { sky: '#b4cbd0', fog: '#c4d0cc', haze: 0.004, preview: [0.9, 1.02, 1.22] },
+  orrery: { sky: '#17283c', fog: '#293c55', haze: 0.003, preview: [0.52, 1.05, 1.27], finishApproach: 2.8 },
+  tideglass: { sky: '#cbe1d3', fog: '#d1e2d8', haze: 0.0042, preview: [0.48, 1.28, 1.45] },
 };
 
 function disposeScenery(root: THREE.Group) {
@@ -116,7 +135,7 @@ export class RaceBroadcast {
   private marker = pickMarker();
   private favorite = -1;
   private gate = new THREE.Group();
-  private scenery?: THREE.Group;
+  private scenery?: CourseScenery;
   private previewCenter = new THREE.Vector3();
   private cameraRight = new THREE.Vector3();
   private cameraUp = new THREE.Vector3();
@@ -295,6 +314,8 @@ export class RaceBroadcast {
   podium() { this.mode = 'podium'; }
 
   update(marbles: MarbleState[], alpha: number, dt: number, elapsed: number) {
+    const displayTime = this.mode === 'race' ? Math.max(0, elapsed - (1 - alpha) * FIXED_DT) : elapsed;
+    this.scenery?.setRaceTime?.(displayTime);
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
       mesh.position.set(marble.previousPosition.x, marble.previousPosition.y, marble.previousPosition.z)
@@ -328,7 +349,7 @@ export class RaceBroadcast {
     const spread = lead - pack[pack.length - 1].distance;
     const p = this.track.sample(center + 0.75);
     const id = this.track.sections.findIndex(section => lead < section.end);
-    const finish = lead >= this.track.finishS - 8;
+    const finish = lead >= this.track.finishS - (settings[this.track.id].finishApproach ?? 8);
     const finishShot = this.track.sections.length;
     const next = finish ? finishShot : Math.max(0, id);
     const old = this.shot;
@@ -348,7 +369,7 @@ export class RaceBroadcast {
       else if (shot.anchor) this.focusGoal.lerp(this.sectionAnchors[this.shot], shot.anchor);
       offset = this.camera.aspect < 0.8 && shot.portraitOffset ? shot.portraitOffset : shot.offset;
       if (shot.trackRelative) {
-        // Orbit outside the helix so the central drum stays behind the racers.
+        // Frame the pack in the local coordinates of the bend.
         this.focusGoal.set(0, 0, 0);
         for (const marble of pack) this.focusGoal.add(marble.position);
         this.focusGoal.divideScalar(pack.length);

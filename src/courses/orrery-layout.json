@@ -1,0 +1,148 @@
+{
+  "seed": 1398030674,
+  "origin": {
+    "x": -26,
+    "z": -19,
+    "angle": 0
+  },
+  "laneCount": 6,
+  "halfWidth": 4.05,
+  "startS": 1.1,
+  "finishS": 202.3329556709155,
+  "launchTrims": [
+    1.8,
+    1.4,
+    0.85,
+    0.35,
+    0.08,
+    0
+  ],
+  "orbitRadius": 9.945941602427048,
+  "returnRadius": 7.856002621771768,
+  "pendulums": [
+    {
+      "s": 75.90882910140053,
+      "lateral": -1.05,
+      "length": 3.6,
+      "angularSpeed": 1.15,
+      "amplitude": 0.405,
+      "phase": 1.8352341053926606
+    },
+    {
+      "s": 86.10882910140053,
+      "lateral": 1.05,
+      "length": 3.88,
+      "angularSpeed": 1.23,
+      "amplitude": 0.405,
+      "phase": 4.083966429754455
+    },
+    {
+      "s": 96.30882910140053,
+      "lateral": -0.3,
+      "length": 3.72,
+      "angularSpeed": 1.08,
+      "amplitude": 0.405,
+      "phase": 5.839499266012201
+    }
+  ],
+  "jumps": [
+    {
+      "takeoff": 183.13295567091552,
+      "landing": 184.28295567091553,
+      "runUp": 3.5,
+      "rise": 1.02,
+      "dip": 1.18
+    },
+    {
+      "takeoff": 195.13295567091552,
+      "landing": 196.48295567091552,
+      "runUp": 3.7,
+      "rise": 1.14,
+      "dip": 1.26
+    }
+  ],
+  "runs": [
+    {
+      "length": 14,
+      "curvature": 0
+    },
+    {
+      "length": 8.831366015091307,
+      "curvature": 0.09090909090909091
+    },
+    {
+      "length": 8.831366015091307,
+      "curvature": -0.09090909090909091
+    },
+    {
+      "length": 8,
+      "curvature": 0
+    },
+    {
+      "length": 31.24609707121791,
+      "curvature": 0.10054352216948227
+    },
+    {
+      "length": 31,
+      "curvature": 0
+    },
+    {
+      "length": 30.164884594949303,
+      "curvature": 0.12729119988181337
+    },
+    {
+      "length": 32,
+      "curvature": 0
+    },
+    {
+      "length": 10.559241974565694,
+      "curvature": -0.09090909090909091
+    },
+    {
+      "length": 32,
+      "curvature": 0
+    }
+  ],
+  "sections": [
+    {
+      "name": "Sidereal Launch",
+      "start": 0,
+      "end": 14
+    },
+    {
+      "name": "Transit S-Bend",
+      "start": 14,
+      "end": 39.66273203018261
+    },
+    {
+      "name": "Solar Orbit",
+      "start": 39.66273203018261,
+      "end": 70.90882910140053
+    },
+    {
+      "name": "Escapement Gallery",
+      "start": 70.90882910140053,
+      "end": 101.90882910140053
+    },
+    {
+      "name": "Retrograde Hairpin",
+      "start": 101.90882910140053,
+      "end": 132.07371369634984
+    },
+    {
+      "name": "Ecliptic Underpass",
+      "start": 132.07371369634984,
+      "end": 164.07371369634984
+    },
+    {
+      "name": "Comet Skips",
+      "start": 164.07371369634984,
+      "end": 199.48295567091552
+    },
+    {
+      "name": "Dawn Straight",
+      "start": 199.48295567091552,
+      "end": 206.63295567091552
+    }
+  ]
+}

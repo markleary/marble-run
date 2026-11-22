@@ -1,5 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { CourseTrack, CourseSurface } from './track';
+import { attachOrreryDrive } from './orreryDrive';
 
 export const FIXED_DT = 1 / 60;
 const GRAVITY = 5.4;
@@ -67,6 +68,7 @@ export class RaceSimulation {
   private readonly lastImpact: number[] = [];
   private readonly finishLine: ReturnType<CourseTrack['sample']>;
   private readonly impacts: Impact[] = [];
+  private readonly advanceDrive?: (seconds: number) => void;
   private tick = 0;
   private racing = false;
   private disposed = false;
@@ -78,7 +80,7 @@ export class RaceSimulation {
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     this.world.timestep = FIXED_DT;
     this.events = new RAPIER.EventQueue(true);
-    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42, wire: 0.40 };
+    const friction = { ice: 0.045, wood: 0.48, lacquer: 0.42, wire: 0.40, glass: 0.31 };
     for (const mesh of track.collisions) {
       const collider = RAPIER.ColliderDesc.trimesh(
         mesh.vertices, mesh.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES,
@@ -98,6 +100,7 @@ export class RaceSimulation {
         .setFriction(0.22).setRestitution(0.28);
       this.world.createCollider(collider);
     }
+    if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
     this.finishLine = track.sample(track.finishS);
     const random = seededRandom(seed);
     const slots = startingSlots(track.laneCount, random);
@@ -132,15 +135,22 @@ export class RaceSimulation {
     this.racing = true;
   }
 
-  rollingSurface(marble: MarbleState): CourseSurface | undefined {
+  rollingSurface(marble: MarbleState, contact: 'any' | 'support' = 'any'): CourseSurface | undefined {
     const ball = this.bodies[marble.id].collider(0);
     const preferred = this.track.surfaceAt(marble.distance);
     let result: CourseSurface | undefined;
     this.world.contactPairsWith(ball, other => {
       const surface = this.surfaceByCollider.get(other.handle);
       if (!surface || result === preferred) return;
-      this.world.contactPair(ball, other, manifold => {
-        if (manifold.numSolverContacts()) result = surface;
+      this.world.contactPair(ball, other, (manifold, flipped) => {
+        if (!manifold.numSolverContacts()) return;
+        if (contact === 'support') {
+          // Point the normal from the track toward the marble, whichever
+          // collider Rapier placed first. A vertical guard supplies no lift.
+          const up = manifold.normal().y * (flipped ? 1 : -1);
+          if (up < 0.5) return;
+        }
+        result = surface;
       });
     });
     return result;
@@ -149,6 +159,7 @@ export class RaceSimulation {
   step(): readonly Impact[] {
     this.impacts.length = 0;
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
+    this.advanceDrive?.((this.tick + 1) * FIXED_DT);
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
