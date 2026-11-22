@@ -6,6 +6,9 @@ import '@fontsource/barlow-condensed/latin-700.css';
 import '@fontsource/barlow-condensed/latin-800-italic.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import './style.css';
+import { courseIds, courses, fieldSizes } from './courses/catalog';
+import type { CourseId } from './courses/catalog';
+import { Standings, finishPoints, normalizedName } from './standings';
 
 export interface Racer {
   id: string;
@@ -24,7 +27,7 @@ export interface UIActions {
   onStart: (racers: Racer[]) => void;
   onSetup: () => void;
   onSound: (enabled: boolean) => void;
-  onPreview?: (racers: Racer[]) => void;
+  onPreview: (racers: Racer[], course: CourseId) => void;
 }
 
 const liveries = [
@@ -65,21 +68,8 @@ function writeSetting(key: string, value: string) {
 
 const setupKey = 'marble-run:setup:v2';
 const soundKey = 'marble-run:sound:v1';
-const winPrefix = 'marble-run:win:v1:';
-
-interface Identity { name: string; color: string }
-interface Total extends Identity { wins: number }
-
-function normalizedName(name: string) {
-  return name.trim().replace(/\s+/g, ' ').slice(0, 18);
-}
-
-function identityKey(identity: Identity) {
-  return identity.color + '/' + normalizedName(identity.name).toLowerCase();
-}
-
 interface Entry { name: string; livery: number }
-interface Setup { count: number; entries: Entry[]; marker: number | null }
+interface Setup { course: CourseId; count: number; entries: Entry[]; marker: number | null }
 
 function readSetup(): Setup {
   function read(key: string) {
@@ -91,16 +81,17 @@ function readSetup(): Setup {
   // The first release stored one favorite and filled the other slots in this order.
   const favorite: number = !hasRoster && Number.isInteger(saved?.livery) && liveries[saved.livery] ? saved.livery : 0;
   const available = [favorite, ...[3, 2, 1, 4, 5, 0].filter(color => color !== favorite)];
-  const entries = Array.from({ length: 4 }, (_, slot) => {
+  const entries = Array.from({ length: liveries.length }, (_, slot) => {
     const entry = hasRoster ? saved.entries[slot] : slot === 0 ? saved : null;
     const preferred = available.indexOf(entry?.livery);
     const [livery] = available.splice(preferred >= 0 ? preferred : 0, 1);
     return { livery, name: typeof entry?.name === 'string' ? normalizedName(entry.name) : liveries[livery].name };
   });
   return {
-    count: [2, 3, 4].includes(saved?.count) ? saved.count : 4,
+    course: courseIds.includes(saved?.course) ? saved.course : 'prism',
+    count: fieldSizes.includes(saved?.count) ? saved.count : 4,
     entries,
-    marker: hasRoster && saved.marker === null ? null : [0, 1, 2, 3].includes(saved?.marker) ? saved.marker : 0,
+    marker: hasRoster && saved.marker === null ? null : Number.isInteger(saved?.marker) && entries[saved.marker] ? saved.marker : 0,
   };
 }
 
@@ -120,11 +111,10 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   let ready = false;
   let racers: Racer[] = [];
   let raceId = '';
-  let lastAward = '';
   let lastOrder = '';
   let lastClock = '';
   let view: 'setup' | 'countdown' | 'race' | 'results' | 'failure' = 'setup';
-  const sessionWins = new Map<string, Identity>();
+  const standings = new Standings(liveries.map(livery => livery.color));
 
   container.innerHTML = `
     <header class="masthead">
@@ -137,8 +127,8 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     </header>
     <div class="preview-caption">
       <span class="preview-label"><i aria-hidden="true"></i> Track preview</span>
-      <div class="course-title">Prism Speedway</div>
-      <div class="course-features">Rolling lanes <b>·</b> Rainbow hairpin <b>·</b> Timber merge</div>
+      <div class="course-title"></div>
+      <div class="course-features"></div>
     </div>
     <main class="side-panel"></main>
     <section class="race-hud" aria-label="Live standings" hidden>
@@ -149,6 +139,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     <div class="sr-only status-announcement" role="status"></div>
     <dialog class="standings-dialog">
       <div class="dialog-heading"><h2>Standings</h2><button class="icon-button close-dialog" aria-label="Close standings">${icon('close')}</button></div>
+      <p class="scoring-rule">Points across both tracks. First earns 3, second earns 2, and third earns 1.</p>
       <div class="standings-content"></div>
     </dialog>`;
 
@@ -191,34 +182,27 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     soundButton.title = sound ? 'Mute sound' : 'Enable sound';
   }
 
-  function totals() {
-    const entries = new Map(sessionWins);
-    try {
-      for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index);
-        if (!key?.startsWith(winPrefix)) continue;
-        try {
-          const winner = JSON.parse(localStorage.getItem(key) ?? 'null');
-          if (winner && typeof winner.name === 'string' && liveries.some((livery) => livery.color === winner.color)) entries.set(key, winner);
-        } catch { /* Skip a malformed entry while preserving other race results. */ }
-      }
-    } catch { /* Current-session wins remain available. */ }
-    const counts = new Map<string, Total>();
-    for (const winner of entries.values()) {
-      const key = identityKey(winner);
-      const previous = counts.get(key);
-      if (previous) previous.wins++;
-      else counts.set(key, { ...winner, wins: 1 });
-    }
-    return [...counts.values()].sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
+  function showStandings() {
+    const scores = standings.totals();
+    element<HTMLElement>('.standings-content').innerHTML = scores.length
+      ? '<table class="scores"><thead><tr><th>Marble</th><th>Wins</th><th>Points</th></tr></thead><tbody>' +
+        scores.map(m => '<tr><th scope="row">' + colorDot(m.color) + escapeText(m.name) + '</th><td>' + m.wins + '</td><td><strong>' + m.points + '</strong></td></tr>').join('') +
+        '</tbody></table>'
+      : '<div class="standings-empty">' + icon('trophy') + '<strong>No races yet</strong><p>Finish a race to start the standings.</p></div>';
+    dialog.showModal();
   }
 
-  function showStandings() {
-    const winners = totals();
-    element<HTMLElement>('.standings-content').innerHTML = winners.length
-      ? '<div class="table-key"><span>Marble</span><span>Wins</span></div><ol class="all-wins">' + winners.map((racer) => '<li><span>' + colorDot(racer.color) + escapeText(racer.name) + '</span><strong>' + racer.wins + '</strong></li>').join('') + '</ol>'
-      : '<div class="standings-empty">' + icon('trophy') + '<strong>No wins yet</strong><p>Finish a race to record the first win.</p></div>';
-    dialog.showModal();
+  function selectCourse(course: CourseId) {
+    config.course = course;
+    const selected = courses[course];
+    document.title = selected.title + ' · Marble Run';
+    document.querySelector('#scene')?.setAttribute('aria-label', 'Three-dimensional view of ' + selected.title);
+    element<HTMLElement>('.course-title').textContent = selected.title;
+    element<HTMLElement>('.course-features').innerHTML = selected.features.join(' <b>·</b> ');
+    panel.querySelectorAll<HTMLButtonElement>('[data-course]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.course === course));
+    });
+    syncSetup();
   }
 
   function syncSetup() {
@@ -236,7 +220,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     const marker = element<HTMLSelectElement>('.marker-setting select');
     marker.replaceChildren(new Option('None', 'none'), ...field.map((racer, slot) => new Option('Player ' + (slot + 1) + ' · ' + racer.name, String(slot))));
     marker.value = config.marker !== null && config.marker < config.count ? String(config.marker) : 'none';
-    actions.onPreview?.(field);
+    actions.onPreview(field, config.course);
   }
 
   function start() {
@@ -255,8 +239,11 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     panel.innerHTML = `
       <form class="setup-form">
         <div class="panel-title"><h1>Race setup</h1><span class="checker" aria-hidden="true"></span></div>
-        <fieldset class="field-size"><legend>Field size</legend><div class="count-choices" aria-label="Number of marbles">
-          ${[2, 3, 4].map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b><span>marbles</span></button>').join('')}
+        <fieldset class="track-picker"><legend>Track</legend><div class="track-options">
+          ${courseIds.map(id => `<button type="button" data-course="${id}"><span aria-hidden="true" class="track-stripes"></span>${courses[id].title}</button>`).join('')}
+        </div></fieldset>
+        <fieldset class="field-size"><legend>Marbles</legend><div class="count-choices" aria-label="Number of marbles">
+          ${fieldSizes.map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b></button>').join('')}
         </div></fieldset>
         <fieldset class="roster-editor"><legend>Starting field</legend>
           <ol class="entrant-list">${config.entries.map((entry, slot) => `
@@ -274,6 +261,9 @@ export function createUI(container: HTMLElement, actions: UIActions) {
         <div class="panel-bottom"><button type="submit" class="primary-button start-button">${icon('flag')}<span>Start race</span>${icon('arrow')}</button></div>
       </form>`;
     element<HTMLButtonElement>('.start-button').disabled = !ready;
+    panel.querySelectorAll<HTMLButtonElement>('[data-course]').forEach(button => {
+      button.addEventListener('click', () => selectCourse(button.dataset.course as CourseId));
+    });
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.addEventListener('click', () => { config.count = Number(button.dataset.count); syncSetup(); }));
     panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
       const input = row.querySelector('input')!;
@@ -294,7 +284,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       syncSetup();
     });
     element<HTMLFormElement>('.setup-form').addEventListener('submit', (event) => { event.preventDefault(); start(); });
-    syncSetup();
+    selectCourse(config.course);
   }
 
   function updateRace(seconds: number, ordered: RaceRow[]) {
@@ -342,22 +332,14 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     });
     if (!raceId || result.length !== racers.length || !result.length) return;
     const winner = result[0];
-    if (lastAward !== raceId) {
-      lastAward = raceId;
-      const key = winPrefix + raceId;
-      const identity = { name: winner.name, color: winner.color };
-      sessionWins.set(key, identity);
-      writeSetting(key, JSON.stringify(identity));
-    }
-    const counts = totals();
+    standings.record(raceId, result);
     setView('results');
     panel.innerHTML = `
-      <div class="results-content"><div class="panel-title"><h1>Race results</h1><span class="checker" aria-hidden="true"></span></div>
+      <div class="results-content"><div class="panel-title"><div><div class="result-course">${courses[config.course].title}</div><h1>Race results</h1></div><span class="checker" aria-hidden="true"></span></div>
       <div class="winner-card" style="--livery:${winner.color}"><div class="winner-marble" aria-hidden="true"><i></i></div><div><span class="small-label">Winner</span><h2>${escapeText(winner.name)}</h2><p>${clock(winner.time)}</p></div></div>
-      <div class="table-key"><span>Finish order</span><span>Time / gap</span><span>Wins</span></div>
+      <div class="table-key"><span>Finish order</span><span>Time / gap</span><span>Points</span></div>
       <ol class="finish-order">${result.map((racer, index) => {
-        const wins = counts.find((entry) => identityKey(entry) === identityKey(racer))?.wins ?? 0;
-        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.marked ? '<small>Marked</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + wins + '</strong></li>';
+        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.marked ? '<small>Marked</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + finishPoints(index) + '</strong></li>';
       }).join('')}</ol>${resultActions()}</div>`;
     status.textContent = winner.name + ' wins in ' + clock(winner.time);
     bindResultsActions();

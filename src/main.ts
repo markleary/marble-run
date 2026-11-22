@@ -1,6 +1,7 @@
 import { createUI } from './ui';
 import type { Racer, RaceRow } from './ui';
 import { RaceSound } from './sound';
+import type { CourseId } from './courses/catalog';
 import type { RaceBroadcast } from './broadcast';
 import type { RaceSimulation } from './simulation';
 
@@ -20,6 +21,8 @@ let lastTimestamp = 0;
 let settling = 0;
 let contextLost = false;
 let previewKey = '';
+let selectedCourse: CourseId = 'prism';
+let changeCourse: ((id: CourseId) => void) | undefined;
 
 const ui = createUI(document.querySelector('#ui')!, {
   onStart(field) {
@@ -37,8 +40,12 @@ const ui = createUI(document.querySelector('#ui')!, {
     sound.enable(enabled);
     if (enabled) sound.unlock();
   },
-  onPreview(field) {
-    const key = field.map(r => r.color).join('/');
+  onPreview(field, course) {
+    if (selectedCourse !== course) {
+      selectedCourse = course;
+      changeCourse?.(course);
+    }
+    const key = [course, ...field.map(r => r.color)].join('/');
     if (key !== previewKey) broadcast?.entrants(field);
     previewKey = key;
     previewDirty = true;
@@ -66,11 +73,15 @@ function announceProblem(message: string) {
 }
 
 async function boot() {
-  const [{ buildPrismTrack }, { RaceBroadcast }, { RaceSimulation, initPhysics, FIXED_DT }] = await Promise.all([
+  const [{ buildTrack }, { RaceBroadcast }, { RaceSimulation, initPhysics, FIXED_DT }] = await Promise.all([
     import('./track'), import('./broadcast'), import('./simulation')
   ]);
-  const track = buildPrismTrack();
+  let track = buildTrack(selectedCourse);
   broadcast = new RaceBroadcast(canvas, track);
+  changeCourse = id => {
+    track = buildTrack(id);
+    broadcast!.setCourse(track);
+  };
   broadcast.entrants(ui.previewRacers());
   broadcast.update([], 1, 1, 0);
   await initPhysics();
@@ -135,8 +146,9 @@ async function boot() {
         lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered());
         const active = heat.marbles.filter(m => m.finishTime === null);
         const speed = active.reduce((sum, m) => sum + m.speed, 0) / active.length;
-        const wood = active.filter(m => m.distance >= track.sections[4].start).length / active.length;
-        sound.rolling(speed, wood);
+        const wood = active.filter(m => track.surfaceAt(m.distance) === 'wood').length / active.length;
+        const ice = active.filter(m => track.surfaceAt(m.distance) === 'ice').length / active.length;
+        sound.rolling(speed, wood, ice);
       }
       broadcast!.update(heat.marbles, Math.min(1, accumulator / FIXED_DT), dt, heat.elapsed);
     } else if (racingState === 'results' && settling > 0) {

@@ -9,7 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test:physics": "node --import tsx tools/soak.ts",
     "test:browser": "node tools/playtest.mjs",
-    "track:generate": "node tools/generate-prism.mjs",
+    "track:generate": "node tools/generate-prism.mjs && node tools/generate-frostline.mjs",
     "audio:generate": "node --env-file=.env tools/generate-audio.mjs"
   },
   "dependencies": {
