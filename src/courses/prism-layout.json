@@ -1,0 +1,76 @@
+{
+  "seed": 1347572557,
+  "origin": {
+    "x": -12,
+    "z": -12.6,
+    "angle": 0
+  },
+  "halfWidth": 2.64,
+  "startS": 1.1,
+  "finishS": 112.33406743523139,
+  "runs": [
+    {
+      "length": 23,
+      "curvature": 0
+    },
+    {
+      "length": 19.792033717615695,
+      "curvature": 0.15873015873015872
+    },
+    {
+      "length": 23,
+      "curvature": 0
+    },
+    {
+      "length": 19.792033717615695,
+      "curvature": -0.15873015873015872
+    },
+    {
+      "length": 31,
+      "curvature": 0
+    }
+  ],
+  "sections": [
+    {
+      "name": "Launch Ramp",
+      "start": 0,
+      "end": 9
+    },
+    {
+      "name": "Prism Rollers",
+      "start": 9,
+      "end": 23
+    },
+    {
+      "name": "Spectrum Hairpin",
+      "start": 23,
+      "end": 42.792033717615695
+    },
+    {
+      "name": "Return Straight",
+      "start": 42.792033717615695,
+      "end": 65.7920337176157
+    },
+    {
+      "name": "Timber Merge",
+      "start": 65.7920337176157,
+      "end": 89.58406743523139
+    },
+    {
+      "name": "Finish Straight",
+      "start": 89.58406743523139,
+      "end": 116.58406743523139
+    }
+  ],
+  "curveRadius": 6.3,
+  "rollerPitch": 7.750758610293269,
+  "banks": {
+    "first": -0.09,
+    "second": 0.27,
+    "launchTilt": 0.27,
+    "launchFlare": 0.8,
+    "launchGrooveDepth": 0.068,
+    "launchGrooveWidth": 0.26,
+    "launchShoulder": 0.175
+  }
+}

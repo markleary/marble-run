@@ -1,0 +1,355 @@
+import '@fontsource/barlow/latin-500.css';
+import '@fontsource/barlow/latin-600.css';
+import '@fontsource/barlow/latin-700.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/barlow-condensed/latin-800-italic.css';
+import '@fontsource/ibm-plex-mono/latin-500.css';
+import './style.css';
+
+export interface Racer {
+  id: string;
+  name: string;
+  color: string;
+  symbol: number;
+  isPlayer: boolean;
+}
+
+export interface RaceRow {
+  id: string;
+  finishTime?: number | null;
+}
+
+export interface UIActions {
+  onStart: (racers: Racer[]) => void;
+  onSetup: () => void;
+  onSound: (enabled: boolean) => void;
+  onPreview?: (racers: Racer[]) => void;
+}
+
+const liveries = [
+  { color: '#ef442a', label: 'Vermilion', name: 'Comet' },
+  { color: '#edae17', label: 'Golden yellow', name: 'Sunbeam' },
+  { color: '#179a74', label: 'Emerald', name: 'Clover' },
+  { color: '#168bd2', label: 'Azure', name: 'Riptide' },
+  { color: '#995bd8', label: 'Violet', name: 'Orbit' },
+  { color: '#e95d97', label: 'Rose', name: 'Rosie' },
+];
+
+const icons = {
+  sound: '<path d="M11.5 4.5 6.7 8.4H3v7.2h3.7l4.8 3.9z"/><path d="M15 8a5.6 5.6 0 0 1 0 8m3-11a9.5 9.5 0 0 1 0 14"/>',
+  mute: '<path d="M11.5 4.5 6.7 8.4H3v7.2h3.7l4.8 3.9z"/><path d="m16 9 6 6m0-6-6 6"/>',
+  trophy: '<path d="M7 3h10v6a5 5 0 0 1-10 0V3Zm5 12v5m-4 1h8M7 6H3v2c0 2.4 1.8 4 4.6 4m9.4-6h4v2c0 2.4-1.8 4-4.6 4"/>',
+  arrow: '<path d="M3 12h17m-6-6 6 6-6 6"/>',
+  replay: '<path d="M3.5 10a8.5 8.5 0 1 1 .4 5M3.5 4v6h6"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  check: '<path d="m5 12 4 4 10-10"/>',
+  flag: '<path d="M5 21V4c4-3 7 3 14 0v10c-7 3-10-3-14 0"/>',
+} as const;
+
+function icon(key: keyof typeof icons) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[key] + '</svg>';
+}
+
+function escapeText(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+}
+
+function readSetting(key: string) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function writeSetting(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* A private session can still race. */ }
+}
+
+const setupKey = 'marble-run:setup:v1';
+const soundKey = 'marble-run:sound:v1';
+const winPrefix = 'marble-run:win:v1:';
+
+interface Identity { name: string; color: string }
+interface Total extends Identity { wins: number }
+
+function normalizedName(name: string) {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 18);
+}
+
+function identityKey(identity: Identity) {
+  return identity.color + '/' + normalizedName(identity.name).toLowerCase();
+}
+
+function readSetup() {
+  try {
+    const saved = JSON.parse(readSetting(setupKey) ?? '{}');
+    return {
+      count: [2, 3, 4].includes(saved.count) ? Number(saved.count) : 4,
+      livery: Number.isInteger(saved.livery) && liveries[saved.livery] ? Number(saved.livery) : 0,
+      name: typeof saved.name === 'string' ? normalizedName(saved.name) : liveries[0].name,
+    };
+  } catch { return { count: 4, livery: 0, name: liveries[0].name }; }
+}
+
+function clock(seconds: number) {
+  const value = Math.max(0, Math.floor(seconds * 100));
+  const minutes = Math.floor(value / 6000);
+  return minutes + ':' + String(Math.floor(value / 100) % 60).padStart(2, '0') + '.' + String(value % 100).padStart(2, '0');
+}
+
+function colorDot(color: string) {
+  return '<span class="identity-dot" aria-hidden="true" style="--livery:' + color + '"></span>';
+}
+
+export function createUI(container: HTMLElement, actions: UIActions) {
+  const config = readSetup();
+  let sound = readSetting(soundKey) !== 'off';
+  let ready = false;
+  let racers: Racer[] = [];
+  let raceId = '';
+  let lastAward = '';
+  let lastOrder = '';
+  let lastClock = '';
+  let view: 'setup' | 'countdown' | 'race' | 'results' | 'failure' = 'setup';
+  const sessionWins = new Map<string, Identity>();
+
+  container.innerHTML = `
+    <header class="masthead">
+      <div class="brand" aria-label="Marble Run"><span class="brand-mark" aria-hidden="true"><i></i></span><span>Marble<span class="brand-run">Run</span></span></div>
+      <div class="top-actions">
+        <button type="button" class="top-button restart-button" aria-label="Restart race" hidden>${icon('replay')}<span>Restart</span></button>
+        <button type="button" class="top-button standings-button">${icon('trophy')}<span>Standings</span></button>
+        <button type="button" class="top-button sound-button"></button>
+      </div>
+    </header>
+    <div class="preview-caption">
+      <span class="preview-label"><i aria-hidden="true"></i> Track preview</span>
+      <div class="course-title">Prism Speedway</div>
+      <div class="course-features">Rolling lanes <b>·</b> Rainbow hairpin <b>·</b> Timber merge</div>
+    </div>
+    <main class="side-panel"></main>
+    <section class="race-hud" aria-label="Live standings" hidden>
+      <div class="hud-title"><span class="on-air"><i></i> Racing</span><time class="race-clock">0:00.00</time></div>
+      <ol class="running-order"></ol>
+    </section>
+    <div class="countdown-overlay" role="status" aria-live="assertive" hidden><span class="countdown-value"></span></div>
+    <div class="sr-only status-announcement" role="status"></div>
+    <dialog class="standings-dialog">
+      <div class="dialog-heading"><h2>Standings</h2><button class="icon-button close-dialog" aria-label="Close standings">${icon('close')}</button></div>
+      <div class="standings-content"></div>
+    </dialog>`;
+
+  function element<T extends Element>(selector: string): T { return container.querySelector<T>(selector)!; }
+  const panel = element<HTMLElement>('.side-panel');
+  const hud = element<HTMLElement>('.race-hud');
+  const runningOrder = element<HTMLOListElement>('.running-order');
+  const time = element<HTMLElement>('.race-clock');
+  const countdown = element<HTMLElement>('.countdown-overlay');
+  const countdownValue = element<HTMLElement>('.countdown-value');
+  const soundButton = element<HTMLButtonElement>('.sound-button');
+  const standingsButton = element<HTMLButtonElement>('.standings-button');
+  const restartButton = element<HTMLButtonElement>('.restart-button');
+  const dialog = element<HTMLDialogElement>('.standings-dialog');
+  const status = element<HTMLElement>('.status-announcement');
+
+  function previewRacers() {
+    const order = [config.livery, ...[3, 2, 1, 4, 5, 0].filter((index) => index !== config.livery)].slice(0, config.count);
+    return order.map((liveryIndex, index) => {
+      const livery = liveries[liveryIndex];
+      return { id: 'marble-' + index, name: index === 0 ? normalizedName(config.name) || livery.name : livery.name, color: livery.color, symbol: liveryIndex, isPlayer: index === 0 };
+    });
+  }
+
+  function setView(next: typeof view) {
+    view = next;
+    document.body.dataset.view = next;
+    const live = next === 'race' || next === 'countdown';
+    panel.hidden = live;
+    element<HTMLElement>('.preview-caption').hidden = next !== 'setup';
+    standingsButton.hidden = live;
+    restartButton.hidden = !live;
+    hud.hidden = !live;
+    countdown.hidden = next !== 'countdown';
+    if (!live) window.scrollTo(0, 0);
+  }
+
+  function updateSound() {
+    soundButton.innerHTML = icon(sound ? 'sound' : 'mute');
+    soundButton.setAttribute('aria-label', sound ? 'Mute sound' : 'Enable sound');
+    soundButton.title = sound ? 'Mute sound' : 'Enable sound';
+  }
+
+  function totals() {
+    const entries = new Map(sessionWins);
+    try {
+      for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(winPrefix)) continue;
+        try {
+          const winner = JSON.parse(localStorage.getItem(key) ?? 'null');
+          if (winner && typeof winner.name === 'string' && liveries.some((livery) => livery.color === winner.color)) entries.set(key, winner);
+        } catch { /* Skip a malformed entry while preserving other race results. */ }
+      }
+    } catch { /* Current-session wins remain available. */ }
+    const counts = new Map<string, Total>();
+    for (const winner of entries.values()) {
+      const key = identityKey(winner);
+      const previous = counts.get(key);
+      if (previous) previous.wins++;
+      else counts.set(key, { ...winner, wins: 1 });
+    }
+    return [...counts.values()].sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
+  }
+
+  function showStandings() {
+    const winners = totals();
+    element<HTMLElement>('.standings-content').innerHTML = winners.length
+      ? '<div class="table-key"><span>Marble</span><span>Wins</span></div><ol class="all-wins">' + winners.map((racer) => '<li><span>' + colorDot(racer.color) + escapeText(racer.name) + '</span><strong>' + racer.wins + '</strong></li>').join('') + '</ol>'
+      : '<div class="standings-empty">' + icon('trophy') + '<strong>No wins yet</strong><p>Finish a race to record the first win.</p></div>';
+    dialog.showModal();
+  }
+
+  function syncSetup() {
+    writeSetting(setupKey, JSON.stringify(config));
+    const field = previewRacers();
+    element<HTMLElement>('.grid-roster').innerHTML = field.map((racer) => '<li>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (racer.isPlayer ? '<small>You</small>' : '') + '</li>').join('');
+    panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
+    panel.querySelectorAll<HTMLButtonElement>('[data-livery]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.livery) === config.livery)));
+    element<HTMLElement>('.livery-name').textContent = liveries[config.livery].label;
+    actions.onPreview?.(field);
+  }
+
+  function start() {
+    if (!ready) return;
+    racers = previewRacers();
+    raceId = globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2);
+    lastOrder = '';
+    lastClock = '';
+    status.textContent = '';
+    if (dialog.open) dialog.close();
+    actions.onStart(racers.map((racer) => ({ ...racer })));
+  }
+
+  function showSetup() {
+    setView('setup');
+    panel.innerHTML = `
+      <form class="setup-form">
+        <div class="panel-title"><h1>Race setup</h1><span class="checker" aria-hidden="true"></span></div>
+        <fieldset class="field-size"><legend>Field size</legend><div class="count-choices" aria-label="Number of marbles">
+          ${[2, 3, 4].map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b><span>marbles</span></button>').join('')}
+        </div></fieldset>
+        <fieldset class="marble-choices"><legend>Your marble</legend>
+          <div class="color-heading"><span>Color</span><strong class="livery-name"></strong></div>
+          <div class="swatches">${liveries.map((livery, i) => '<button type="button" data-livery="' + i + '" aria-label="' + livery.label + '" title="' + livery.label + '" style="--livery:' + livery.color + '"><i></i></button>').join('')}</div>
+          <label class="name-label" for="marble-name">Name</label>
+          <input id="marble-name" name="marble-name" type="text" maxlength="18" autocomplete="off" spellcheck="false" placeholder="${liveries[config.livery].name}">
+        </fieldset>
+        <div class="roster-block"><h2>Starting field</h2><ul class="grid-roster"></ul></div>
+        <div class="panel-bottom"><button type="submit" class="primary-button start-button">${icon('flag')}<span>Start race</span>${icon('arrow')}</button></div>
+      </form>`;
+    const input = element<HTMLInputElement>('#marble-name');
+    input.value = config.name;
+    element<HTMLButtonElement>('.start-button').disabled = !ready;
+    panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.addEventListener('click', () => { config.count = Number(button.dataset.count); syncSetup(); }));
+    panel.querySelectorAll<HTMLButtonElement>('[data-livery]').forEach((button) => button.addEventListener('click', () => {
+      const oldDefault = liveries[config.livery].name;
+      config.livery = Number(button.dataset.livery);
+      input.placeholder = liveries[config.livery].name;
+      if (!config.name.trim() || config.name === oldDefault) {
+        config.name = liveries[config.livery].name;
+        input.value = config.name;
+      }
+      syncSetup();
+    }));
+    input.addEventListener('input', () => { config.name = input.value; syncSetup(); });
+    element<HTMLFormElement>('.setup-form').addEventListener('submit', (event) => { event.preventDefault(); start(); });
+    syncSetup();
+  }
+
+  function updateRace(seconds: number, ordered: RaceRow[]) {
+    const formatted = clock(seconds);
+    if (lastClock !== formatted) { time.textContent = formatted; lastClock = formatted; }
+    const order = ordered.map((entry) => entry.id + '/' + (entry.finishTime ?? '')).join('|');
+    if (order === lastOrder) return;
+    lastOrder = order;
+    runningOrder.innerHTML = ordered.map((entry, index) => {
+      const racer = racers.find((r) => r.id === entry.id);
+      if (!racer) return '';
+      return '<li><b>' + (index + 1) + '</b>' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + '</span>' + (entry.finishTime != null ? icon('flag') : racer.isPlayer ? '<small>You</small>' : '') + '</li>';
+    }).join('');
+  }
+
+  function showCountdown(n: number) {
+    if (view !== 'countdown') {
+      setView('countdown');
+      element<HTMLElement>('.on-air').innerHTML = '<i></i> On grid';
+      updateRace(0, racers);
+    }
+    const value = n > 0 ? String(n) : 'Go!';
+    if (countdownValue.textContent !== value) countdownValue.textContent = value;
+  }
+
+  function showRace() {
+    setView('race');
+    element<HTMLElement>('.on-air').innerHTML = '<i></i> Racing';
+    status.textContent = 'Race started.';
+  }
+
+  function bindResultsActions() {
+    element<HTMLButtonElement>('.rematch-button').addEventListener('click', start);
+    element<HTMLButtonElement>('.setup-button').addEventListener('click', () => { showSetup(); actions.onSetup(); });
+  }
+
+  function resultActions() {
+    return '<div class="panel-bottom"><button class="primary-button rematch-button">' + icon('replay') + '<span>Race again</span>' + icon('arrow') + '</button><button class="secondary-button setup-button">Change setup</button></div>';
+  }
+
+  function showResults(ordered: RaceRow[]) {
+    const result = ordered.flatMap((row) => {
+      const racer = racers.find((item) => item.id === row.id);
+      return racer && row.finishTime != null ? [{ ...racer, time: row.finishTime }] : [];
+    });
+    if (!raceId || result.length !== racers.length || !result.length) return;
+    const winner = result[0];
+    if (lastAward !== raceId) {
+      lastAward = raceId;
+      const key = winPrefix + raceId;
+      const identity = { name: winner.name, color: winner.color };
+      sessionWins.set(key, identity);
+      writeSetting(key, JSON.stringify(identity));
+    }
+    const counts = totals();
+    setView('results');
+    panel.innerHTML = `
+      <div class="results-content"><div class="panel-title"><h1>Race results</h1><span class="checker" aria-hidden="true"></span></div>
+      <div class="winner-card" style="--livery:${winner.color}"><div class="winner-marble" aria-hidden="true"><i></i></div><div><span class="small-label">Winner</span><h2>${escapeText(winner.name)}</h2><p>${clock(winner.time)}</p></div></div>
+      <div class="table-key"><span>Finish order</span><span>Time / gap</span><span>Wins</span></div>
+      <ol class="finish-order">${result.map((racer, index) => {
+        const wins = counts.find((entry) => identityKey(entry) === identityKey(racer))?.wins ?? 0;
+        return '<li><b>' + (index + 1) + '</b><div class="finish-name">' + colorDot(racer.color) + '<span>' + escapeText(racer.name) + (racer.isPlayer ? '<small>You</small>' : '') + '</span></div><div class="finish-time">' + clock(racer.time) + (index ? '<small>+' + (racer.time - winner.time).toFixed(2) + 's</small>' : '') + '</div><strong>' + wins + '</strong></li>';
+      }).join('')}</ol>${resultActions()}</div>`;
+    status.textContent = winner.name + ' wins in ' + clock(winner.time);
+    bindResultsActions();
+  }
+
+  function showFailure(message: string) {
+    setView('failure');
+    panel.innerHTML = '<div class="results-content"><div class="panel-title"><h1>Race stopped</h1></div><p class="failure-message">' + escapeText(message) + '</p>' + resultActions() + '</div>';
+    bindResultsActions();
+    status.textContent = message;
+  }
+
+  function setReady(value: boolean) {
+    ready = value;
+    const button = panel.querySelector<HTMLButtonElement>('.start-button');
+    if (button) button.disabled = !ready;
+  }
+
+  soundButton.addEventListener('click', () => { sound = !sound; writeSetting(soundKey, sound ? 'on' : 'off'); updateSound(); actions.onSound(sound); });
+  standingsButton.addEventListener('click', showStandings);
+  restartButton.addEventListener('click', start);
+  element<HTMLButtonElement>('.close-dialog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) { const b = dialog.getBoundingClientRect(); if (event.clientX < b.left || event.clientX > b.right || event.clientY < b.top || event.clientY > b.bottom) dialog.close(); } });
+  updateSound();
+  showSetup();
+
+  return { previewRacers, showSetup, showCountdown, showRace, updateRace, showResults, showFailure, setReady, soundEnabled: () => sound };
+}
