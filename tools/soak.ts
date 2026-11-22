@@ -8,7 +8,10 @@ import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkCruxKnockouts } from './check-crux';
-import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
+import { cruxJumps } from '../src/courses/crux';
+import { orreryJumps } from '../src/courses/orreryJumps';
+import { checkOrreryCrossing } from './check-orrery';
+import { checkCourseJumps } from './check-jumps';
 import { initPhysics, RaceSimulation } from '../src/simulation';
 import type { MarbleState } from '../src/simulation';
 
@@ -111,6 +114,8 @@ function exerciseField(track: CourseTrack, count: number) {
             assert.equal(gate.arrivals.length, count);
             assert.equal(new Set(gate.arrivals.map(a => a.id)).size, count);
             assert.ok(!gate.cut);
+            assert.equal(gate.phase, 'bypass');
+            assert.equal(gate.releasedAt, null);
           }
           const winningTime = finishers[0].finishTime!;
           assert.ok(winningTime >= 120, 'Crux winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
@@ -210,13 +215,16 @@ for (const id of courseIds) {
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
   if (id === 'kepler') checkKeplerReceiver(track);
-  if (id === 'crux') checkCruxKnockouts(track, firstSeed, repetitions);
+  if (id === 'crux') {
+    checkCruxKnockouts(track, firstSeed, repetitions);
+    checkCourseJumps(track, firstSeed, cruxJumps);
+  }
   if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux'].includes(id)) checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
   if (id === 'orrery') {
     checkOrreryCrossing(track);
-    checkOrreryJumps(track, firstSeed);
+    checkCourseJumps(track, firstSeed, orreryJumps);
   }
 }
 assert.equal(failures, 0, failures + ' heats failed; see the courses and seeds above.');

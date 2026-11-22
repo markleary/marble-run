@@ -2,53 +2,59 @@ import { writeFile } from 'node:fs/promises'
 
 const seed = 0x43525558
 let state = seed
-const random = () => {
+function random() {
   state = (Math.imul(1664525, state) + 1013904223) >>> 0
   return state / 0x100000000
 }
 const line = length => ({ length, curvature: 0 })
-const turn = (radius, degrees) => ({ length: radius * Math.abs(degrees) * Math.PI / 180, curvature: Math.sign(degrees) / radius })
+// Approximate a clothoid at each end of the 180° sweeps. Increasing the
+// curvature in small steps lets a fast marble enter the bend progressively.
+function turnaround(radius, side) {
+  const transition = [1, 3, 5, 7, 9].map(n => ({ length: 5, curvature: side * n / (10 * radius) }))
+  const middle = { length: Math.PI * radius - 25, curvature: side / radius }
+  return [...transition, middle, ...transition.toReversed()]
+}
 const sections = [], runs = []
 let length = 0
 function section(name, ...pieces) {
   const start = length
-  for (const piece of pieces) {
-    runs.push(piece)
-    length += piece.length
-  }
+  runs.push(...pieces)
+  length += pieces.reduce((total, piece) => total + piece.length, 0)
   sections.push({ name, start, end: length })
 }
 
-// Six traverses fold a long competition route into the width of a bouldering hall.
-section('Belay Gate', line(14))
-section('Speed Wall', line(40))
-section('Chalk Turn', turn(8.5, 180))
-section('Volume Alley', line(53))
-section('Arête Hairpin', turn(8.5, -180))
-section('Ribbon Traverse', line(12), turn(13, 30), turn(13, -60), turn(13, 30), line(16))
-section('Highball Bend', turn(8.25, 180))
-section('Slab Switches', line(54))
-section('Compass Turn', turn(8.25, -180))
-section('Final Traverse', line(16), turn(12, -28), turn(12, 56), turn(12, -28), line(13))
-section('Summit Hook', turn(7.75, 180))
-section('Summit Runout', line(60))
+// Six uninterrupted gallery straights leave room for the approach, the open
+// transfer and the receiving deck. Five banked turnarounds link the galleries.
+section('Belay Gate', line(18))
+section('Headwall Launch', line(109))
+section('Chalk Velodrome', ...turnaround(23, 1))
+section('Dyno Straight', line(138))
+section('Arête Hairpin', ...turnaround(24, -1))
+section('Ribbon Traverse', line(86))
+section('Highball Bend', ...turnaround(23.5, 1))
+section('Slab Flight', line(139))
+section('Compass Turn', ...turnaround(24.5, -1))
+section('Final Traverse', line(88))
+section('Summit Hook', ...turnaround(23, 1))
+section('Summit Runout', line(107))
 
-// Each volume is an oblique four-sided pyramid, with its diamond footprint
-// skewed across the racing line. The three pairs leave a different line open down the hall.
-const volumes = [
-  [6.5, -2.15, 7.3, 2.65, .84, .16], [11, .95, 8.6, 3.35, 1.04, -.16],
-  [22, 2.08, 8.3, 2.83, .94, -.13], [26, -.95, 7.2, 3.12, .79, .17],
-  [38, -2.21, 7.8, 2.76, .82, -.15], [42, 1.16, 9.4, 3.3, .97, .14],
-].map(([offset, lateral, length, width, height, skew]) => ({
-  s: sections[3].start + offset, lateral, length, width, height: height + .06 * random(), skew,
-}))
+const jumps = [
+  [1, 'Headwall Gap', 52, 5.2, 2.05, 6.1, 4.4],
+  [3, 'Dyno Gap', 44, 5.6, 2.26, 6.9, 4.7],
+  [7, 'Slab Gap', 44, 5.5, 2.10, 7.2, 4.8],
+  [11, 'Summit Gap', 42, 5.8, 2.39, 7.6, 5.1],
+].map(([sectionIndex, name, offset, runup, rise, gap, drop]) => {
+  const takeoff = sections[sectionIndex].start + offset
+  const rampStart = takeoff - runup, landing = takeoff + gap
+  return {
+    sectionIndex, name, diveStart: rampStart - 30, rampStart, takeoff, landing, catchEnd: landing + 44,
+    dive: 5.2 + .35 * random(), rise, drop,
+  }
+})
 
 const layout = {
-  seed, origin: { x: -26, z: -41, angle: 0 },
-  laneCount: 6, halfWidth: 4, startS: 1.1, finishS: length - 4.5,
-  launchTrims: [.635, .549, .446, .372, .269, .177],
-  startingCamber: .25,
-  slabCants: [.16, -.19, .18, -.15],
-  volumes, sections, runs,
+  seed, origin: { x: -73, z: -121, angle: 0 }, laneCount: 6, halfWidth: 4.35,
+  startS: 1.1, finishS: length - 9, launchTrims: [.75, .61, .47, .34, .22, .12],
+  jumps, sections, runs,
 }
 await writeFile(new URL('../src/courses/crux-layout.json', import.meta.url), JSON.stringify(layout, null, 2) + '\n')

@@ -6,6 +6,7 @@ import { preview } from 'vite';
 import { tsImport } from 'tsx/esm/api';
 import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
 import keplerLayout from '../src/courses/kepler-layout.json' with { type: 'json' };
+import cruxLayout from '../src/courses/crux-layout.json' with { type: 'json' };
 
 const url = process.env.MARBLE_URL;
 const base = '/marble-run/';
@@ -91,7 +92,8 @@ async function landmarkTimes(id, seed, sections) {
     assert.ok(section, id + ' is missing the ' + name + ' camera section.');
     return [name, (section.start + section.end) / 2];
   });
-  const jump = id === 'orrery' ? orreryLayout.jumps[0] : id === 'kepler' ? keplerLayout.jump : undefined;
+  const jump = id === 'orrery' ? orreryLayout.jumps[0] : id === 'kepler' ? keplerLayout.jump
+    : id === 'crux' ? cruxLayout.jumps[0] : undefined;
   if (jump) {
     const { takeoff, landing } = jump;
     marks.push(['Airborne', (takeoff + landing) / 2]);
@@ -107,6 +109,16 @@ async function landmarkTimes(id, seed, sections) {
       }
       assert.ok(!heat.failure && !heat.finished, name + ' rehearsal failed: ' + heat.failure);
       times[name] = heat.elapsed;
+    }
+    if (id === 'crux') {
+      const gate = heat.competition.gates[0];
+      while (!heat.failure && !heat.finished && gate.releasedAt === null) {
+        heat.step();
+        if (gate.seated.length === gate.field - 1 && gate.releasedAt === null) times.Rack ??= heat.elapsed;
+      }
+      assert.ok(times.Rack && gate.releasedAt !== null, 'All qualifying marbles must reach the rack before release.');
+      times.Rack = (times.Rack + gate.releasedAt) / 2;
+      times.Release = gate.releasedAt + .5;
     }
     return times;
   } finally {
@@ -365,9 +377,9 @@ try {
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
   const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
-  const crux = await landmarkTimes('crux', seeds.crux, ['Volume Alley', 'Slab Switches']);
+  const crux = await landmarkTimes('crux', seeds.crux, ['Chalk Velodrome']);
   const jumpShots = {};
-  for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne]]) {
+  for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne], ['crux', crux.Airborne]]) {
     jumpShots[id] = { approach: clock(time - 1), target: clock(time - .04) };
   }
   for (const [title, id, shots] of [
@@ -390,11 +402,21 @@ try {
       [clock(kepler['Orbital Return']), 'orbital-return'],
     ]],
     ['Crux Mountain Masters', 'crux', [
-      [clock(crux['Volume Alley']), 'volume-alley'],
-      [clock(crux['Slab Switches']), 'slab-switches'],
+      [jumpShots.crux.target, 'headwall-gap'],
+      [clock(crux['Chalk Velodrome']), 'chalk-velodrome'],
+      [clock(crux.Rack), 'qualification-rack'],
+      [clock(crux.Release), 'gate-release'],
     ]],
   ]) {
     await trackButton(title).click();
+    if (id === 'crux') {
+      // With three entrants the first three stations record open splits before the cut at CP 4.
+      await fieldButton(3).click();
+      await startButton.click();
+      await page.getByText('CP 1 · Open gate', { exact: true }).waitFor();
+      await page.getByText(/^CP 1 · .+ leads$/).waitFor({ timeout: 90000 });
+      await page.reload();
+    }
     await fieldButton(6).click();
     await marker.selectOption('5');
     // Cover both booting a saved course and changing physics/audio in the same session.
@@ -407,13 +429,17 @@ try {
     await page.evaluate(() => { window.playtestMusicStarted = false; });
     if (id in seeds) {
       // Apply the rehearsed grid once. The rematch still draws a random grid.
-      await page.evaluate(({ seed, shot }) => {
+      await page.evaluate(seed => {
         window.playtestNextSeed = seed;
-        window.playtestActionShot = shot;
-      }, { seed: seeds[id], shot: jumpShots[id] });
+      }, seeds[id]);
     }
     await startButton.click();
     for (const [time, shot] of shots) {
+      const freeze = time === jumpShots[id]?.target || shot === 'qualification-rack' || shot === 'gate-release';
+      if (freeze) {
+        const approach = time === jumpShots[id]?.target ? jumpShots[id].approach : clock((shot === 'qualification-rack' ? crux.Rack : crux.Release) - 1);
+        await page.evaluate(spec => { window.playtestActionShot = spec; }, { approach, target: time });
+      }
       await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 90000 });
       if (id === 'kepler' && shot === 'arrays' && canFullscreen) {
         await enterFullscreen.click();
@@ -422,8 +448,9 @@ try {
         await assertFullscreen(false);
       }
       await capture(id + '-' + shot);
-      if (time === jumpShots[id]?.target) await page.evaluate(() => { delete window.playtestActionShot; });
+      if (freeze) await page.evaluate(() => { delete window.playtestActionShot; });
       if (id === 'crux') assert.ok(await page.locator('.checkpoint-status').isVisible());
+      if (shot === 'gate-release') assert.match(await page.locator('.checkpoint-status').innerText(), /5 released/);
     }
     await assertRacers('.running-order', entrants);
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');

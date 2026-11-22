@@ -5,6 +5,9 @@ import type { MarbleState } from './simulation';
 import { FIXED_DT } from './simulation';
 import type { CourseTrack } from './track';
 import type { CourseId } from './courses/catalog';
+import type { RaceCheckpoint } from './cruxCompetition';
+import { cruxJumps } from './courses/crux';
+import { cruxRack } from './courses/cruxCheckpoints';
 import { createCourseScenery, type CourseScenery } from './scenery';
 import keplerNebula from './assets/kepler-nebula.jpg';
 import { createKeplerTrails } from './keplerTrails';
@@ -177,6 +180,7 @@ export class RaceBroadcast {
   private mode: 'preview' | 'grid' | 'race' | 'podium' = 'preview';
   private shot = -1;
   private previousCut = -10;
+  private featureShot = '';
   private sectionAnchors: THREE.Vector3[] = [];
   private fixedFrames: THREE.Vector3[][] = [];
   private viewSize = new THREE.Vector2();
@@ -233,11 +237,9 @@ export class RaceBroadcast {
     const theme = settings[track.id];
     // Reset the light when leaving the moving Kepler rig. The Crux terraces
     // require both a wider shadow frustum and more distance to the light.
-    const extent = track.id === 'crux' ? 71 : 40;
     this.sun.target.position.set(0, 0, 0);
-    this.sun.position.set(-18, 38, -22).multiplyScalar(track.id === 'crux' ? 2.15 : 1);
-    Object.assign(this.sun.shadow.camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far: extent * 2.5 });
-    this.sun.shadow.camera.updateProjectionMatrix();
+    this.sun.position.set(-18, 38, -22);
+    this.fitShadows(track.id === 'crux' ? 175 : 40);
     if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose();
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.FogExp2(theme.fog, theme.haze);
@@ -311,8 +313,20 @@ export class RaceBroadcast {
     this.camera.lookAt(this.focus);
   }
 
+  private fitShadows(extent: number) {
+    const camera = this.sun.shadow.camera;
+    if (camera.right === extent) return;
+    Object.assign(camera, { left: -extent, right: extent, top: extent, bottom: -extent, near: 1, far: extent * 2.5 });
+    camera.updateProjectionMatrix();
+  }
+
   preview() {
     this.mode = 'preview';
+    if (this.track.id === 'crux') {
+      this.fitShadows(175);
+      // The overview camera sits hundreds of units outside the cutaway hall.
+      if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = .00065;
+    }
     this.gateRaised = false;
     this.marker.visible = false;
     this.focusGoal.copy(this.previewCenter);
@@ -367,7 +381,11 @@ export class RaceBroadcast {
   }
 
   grid() {
-    this.mode = 'grid'; this.shot = -1; this.previousCut = -10;
+    if (this.track.id === 'crux') {
+      this.fitShadows(38);
+      if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = settings.crux.haze;
+    }
+    this.mode = 'grid'; this.shot = -1; this.previousCut = -10; this.featureShot = '';
     this.gateRaised = false;
     const p = this.track.sample(this.track.startS);
     this.focusGoal.set(p.x + 0.4 * p.tx, p.y + 0.45, p.z + 0.4 * p.tz);
@@ -379,24 +397,29 @@ export class RaceBroadcast {
   race() { this.mode = 'race'; this.gateRaised = true; }
   podium() { this.mode = 'podium'; }
 
-  update(marbles: MarbleState[], alpha: number, dt: number, elapsed: number) {
+  update(marbles: MarbleState[], alpha: number, dt: number, elapsed: number, gates?: readonly RaceCheckpoint[]) {
     const displayTime = this.mode === 'race' ? Math.max(0, elapsed - (1 - alpha) * FIXED_DT) : elapsed;
     this.scenery?.setRaceTime?.(displayTime);
+    this.scenery?.updateStations?.(gates, displayTime);
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
-      mesh.visible = marble.cutAt === undefined;
-      if (!mesh.visible) continue;
+      if (marble.cutAt !== undefined) {
+        const gate = gates?.find(g => g.number === marble.cutAt);
+        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime);
+        continue;
+      }
+      mesh.visible = true;
       mesh.position.set(marble.previousPosition.x, marble.previousPosition.y, marble.previousPosition.z)
         .lerp(marble.position, alpha);
       mesh.quaternion.copy(marble.previousRotation).slerp(this.q.copy(marble.rotation), alpha);
     }
-    this.marker.visible = this.favorite >= 0 && this.balls[this.favorite].visible && (this.mode === 'race' || this.mode === 'grid');
+    this.marker.visible = this.favorite >= 0 && !marbles[this.favorite]?.cutAt && (this.mode === 'race' || this.mode === 'grid');
     if (this.balls[this.favorite]) {
       this.marker.position.copy(this.balls[this.favorite].position);
       this.marker.position.y += this.track.radius * 2.5;
     }
     if (this.mode === 'race') {
-      this.racingShot(marbles, elapsed);
+      this.racingShot(marbles, elapsed, gates);
       this.trails?.update(marbles, this.balls, displayTime);
     }
     if (this.mode === 'podium') {
@@ -408,8 +431,11 @@ export class RaceBroadcast {
     const smooth = 1 - Math.exp(-dt * 5);
     this.eyes.lerp(this.positionGoal, smooth); this.focus.lerp(this.focusGoal, smooth);
     this.camera.position.copy(this.eyes); this.camera.lookAt(this.focus);
-    if (this.track.id === 'kepler') {
-      // The relay spans more than the studio shadow camera. Keep contact shadows on the racing pack.
+    if (this.track.id === 'crux' && this.mode === 'preview') {
+      this.sun.target.position.copy(this.previewCenter);
+      this.sun.position.set(-18, 38, -22).multiplyScalar(5).add(this.previewCenter);
+    } else if (this.track.id === 'kepler' || this.track.id === 'crux') {
+      // Both long courses span more than the studio shadow camera. Keep contact shadows on the racing pack.
       this.sun.target.position.copy(this.focus);
       this.sun.position.set(this.focus.x - 18, this.focus.y + 38, this.focus.z - 22);
     }
@@ -417,7 +443,7 @@ export class RaceBroadcast {
     this.renderer.render(this.scene, this.camera);
   }
 
-  private racingShot(marbles: MarbleState[], elapsed: number) {
+  private racingShot(marbles: MarbleState[], elapsed: number, gates?: readonly RaceCheckpoint[]) {
     const running = marbles.filter(marble => marble.finishTime === null && marble.cutAt === undefined).sort((a, b) => b.distance - a.distance);
     if (!running.length) return;
     const lead = running[0].distance;
@@ -436,7 +462,47 @@ export class RaceBroadcast {
     }
     this.focusGoal.set(p.x, p.y + 0.42, p.z);
     let offset: Offset;
-    if (this.shot === finishShot) {
+    let feature = '';
+    let featureFrame: THREE.Vector3[] | undefined;
+    const station = gates?.find(g => g.cut && (g.phase === 'loading'
+      || (g.phase === 'ready' && lead >= g.s - cruxRack.funnelLength - 1 && lead <= g.s + cruxRack.seatOffset + 1)
+      || (g.releasedAt !== null && elapsed - g.releasedAt < 1.1)));
+    const jump = this.track.id === 'crux' && cruxJumps.find(j => lead >= j.rampStart - 2 && lead <= j.catchEnd);
+    if (station) {
+      // Keep the line, the actual row of survivors and the chrome rail together.
+      // In portrait look more along the row, so the marbles can remain large.
+      feature = 'gate-' + station.number;
+      const loading = station.phase !== 'ready';
+      const far = station.s + cruxRack.barOffset + .9;
+      const near = loading ? station.s + .70 : Math.max(station.s - cruxRack.funnelLength + 1, lead - 2.3);
+      const anchor = this.track.sample(loading ? station.s + 2.9 : (far + near) / 2);
+      this.focusGoal.set(anchor.x, anchor.y + .98, anchor.z);
+      const along = this.camera.aspect < .8 ? 7.4 : 9.7;
+      const side = this.camera.aspect < .8 ? -8.6 : -4.6;
+      offset = [anchor.tx * along + anchor.rx * side, loading ? 5.7 : 8.0, anchor.tz * along + anchor.rz * side];
+      featureFrame = [near, far].flatMap(s => [-1, 1].map(side => {
+        const p = this.track.sample(s, side * (loading ? this.track.halfWidth - .32 : this.track.halfWidth - .17));
+        return new THREE.Vector3(p.x, p.y + (loading && s === near ? 3.1 : .55), p.z);
+      }));
+    } else if (jump) {
+      feature = jump.name;
+      // Track the airborne bodies rather than the interpolation surface through the gap.
+      this.focusGoal.set(0, 0, 0);
+      for (const marble of pack) this.focusGoal.add(this.balls[marble.id].position);
+      this.focusGoal.divideScalar(pack.length);
+      const lip = this.track.sample(jump.takeoff);
+      const portrait = this.camera.aspect < .8;
+      const side = (lip.rz < 0 ? -1 : 1) * (portrait ? 8.0 : 13.5);
+      const forward = portrait ? 8.8 : 2.4;
+      offset = [lip.tx * forward + lip.rx * side, portrait ? 5.9 : 4.5, lip.tz * forward + lip.rz * side];
+      if (lead >= jump.takeoff - 3 && lead <= jump.landing + 6) {
+        const receiver = this.track.sample(jump.landing + 1.3);
+        const midpoint = this.relative.set((lip.x + receiver.x) / 2, (lip.y + receiver.y) / 2 + 1, (lip.z + receiver.z) / 2);
+        this.focusGoal.lerp(midpoint, .38);
+        featureFrame = [...pack.map(m => this.balls[m.id].position),
+          new THREE.Vector3(lip.x, lip.y + .1, lip.z), new THREE.Vector3(receiver.x, receiver.y, receiver.z)];
+      }
+    } else if (this.shot === finishShot) {
       const line = this.track.sample(this.track.finishS - 0.35);
       const lock = THREE.MathUtils.smoothstep(center, this.track.finishS - 7.5, this.track.finishS - 1.8);
       this.focusGoal.lerp(this.relative.set(line.x, line.y + 0.4, line.z), lock);
@@ -456,7 +522,7 @@ export class RaceBroadcast {
       }
     }
     this.sightLine.set(...offset);
-    const fixedFrame = this.fixedFrames[this.shot];
+    const fixedFrame = featureFrame ?? this.fixedFrames[this.shot];
     const fixed = fixedFrame?.length > 0;
     const zoom = fixed ? 1 : Math.max(1, 1.18 / this.camera.aspect) * (1 + spread * 0.043);
     const baseDistance = this.sightLine.length() * zoom;
@@ -474,6 +540,7 @@ export class RaceBroadcast {
       distance = Math.max(distance, this.relative.dot(this.sightLine) + Math.max(width, height) / (tan * 0.86));
     }
     this.positionGoal.copy(this.focusGoal).addScaledVector(this.sightLine, distance);
-    if (old !== this.shot && old >= 0) this.snap();
+    if ((old !== this.shot && old >= 0) || feature !== this.featureShot) this.snap();
+    this.featureShot = feature;
   }
 }

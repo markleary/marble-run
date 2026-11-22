@@ -1,6 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { CourseTrack, CourseSurface } from './track';
 import { attachOrreryDrive } from './orreryDrive';
+import { attachCruxRacks } from './cruxRackDrive';
 import type { CruxFormat } from './courses/cruxCheckpoints';
 import { createCruxCompetition } from './cruxCompetition';
 import { crossingTime } from './raceTiming';
@@ -32,6 +33,8 @@ export interface MarbleState {
   speed: number;
   finishTime: number | null;
   cutAt?: number;
+  stagingAt?: number;
+  rackSlot?: number;
 }
 
 export interface Impact {
@@ -74,6 +77,7 @@ export class RaceSimulation {
   private readonly finishLine: ReturnType<CourseTrack['sample']>;
   private readonly impacts: Impact[] = [];
   private readonly advanceDrive?: (seconds: number) => void;
+  private readonly driveRacks?: ReturnType<typeof attachCruxRacks>;
   readonly competition?: ReturnType<typeof createCruxCompetition>;
   private tick = 0;
   private racing = false;
@@ -136,6 +140,9 @@ export class RaceSimulation {
         distance: track.startS, progress: 0, speed: 0, finishTime: null,
       };
     });
+    if (this.competition?.gates.some(gate => gate.cut)) {
+      this.driveRacks = attachCruxRacks(this.world, track, this.competition.gates, this.bodies);
+    }
   }
 
   release(): void {
@@ -172,6 +179,7 @@ export class RaceSimulation {
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
     this.competition?.step(this.marbles, this.elapsed, FIXED_DT, this.withdraw);
+    this.driveRacks?.(this.marbles, this.elapsed, FIXED_DT);
     this.events.drainContactForceEvents(event => {
       const id = this.idByCollider.get(event.collider1()) ?? this.idByCollider.get(event.collider2());
       if (id === undefined || this.elapsed - this.lastImpact[id] < 0.12) return;
@@ -202,6 +210,17 @@ export class RaceSimulation {
       const velocity = body.linvel();
       marble.speed = Math.hypot(velocity.x, velocity.y, velocity.z);
       if (!this.finished && marble.finishTime === null) this.updateProgress(marble);
+      // The receiving bed damps both translation and roll after the entire
+      // sphere has cleared the timing stripe. The result is already locked.
+      if (this.track.id === 'crux' && marble.finishTime !== null && body.linearDamping() < 2.4) {
+        const line = this.finishLine;
+        const depth = (marble.position.x - line.x) * line.tx + (marble.position.z - line.z) * line.tz - 1.1;
+        if (depth > 0) {
+          const felt = 2.4 * Math.min(1, depth);
+          body.setLinearDamping(Math.max(body.linearDamping(), felt));
+          body.setAngularDamping(Math.max(body.angularDamping(), felt));
+        }
+      }
     }
   }
 
@@ -229,6 +248,9 @@ export class RaceSimulation {
     }
 
     const checkpoint = this.checkpoints[marble.id];
+    // Waiting behind a closed start bar is intentional. Reset the progress
+    // watchdog there so the fresh start has the same grace period as the grid.
+    if (marble.stagingAt !== undefined) checkpoint.time = this.elapsed;
     if (nearest.s > checkpoint.distance + 0.2) {
       checkpoint.distance = nearest.s;
       checkpoint.time = this.elapsed;

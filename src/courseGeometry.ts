@@ -52,6 +52,8 @@ export interface Profile {
   layered?: boolean
   /** Mold the lane guides into the running surface instead of adding upright fins. */
   roundedLaneDepth?: number
+  /** Long, broad surfaces can use fewer collision samples along and across the track. */
+  collisionResolution?: { rowSpacing: number; bandsPerLane: number }
   wallHeight?(s: number): number
   height(s: number, lateral: number): number
   divider(s: number): number
@@ -150,8 +152,9 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
     { lateral: -halfWidth, lift: 'wall' }, { lateral: -halfWidth, lift: 0 },
   ]
   if (profile.roundedLaneDepth !== undefined) {
-    for (let i = 1; i < laneCount * roundedLaneBands; i++) {
-      cross.push({ lateral: -halfWidth + (i / roundedLaneBands) * laneWidth, lift: 0 })
+    const bandsPerLane = profile.collisionResolution?.bandsPerLane ?? roundedLaneBands
+    for (let i = 1; i < laneCount * bandsPerLane; i++) {
+      cross.push({ lateral: -halfWidth + (i / bandsPerLane) * laneWidth, lift: 0 })
     }
   } else {
     for (let lane = 0; lane < laneCount; lane++) {
@@ -165,7 +168,7 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
 
   const collisions = spans.map(({ start, end, surface }) => {
     // Each contact surface owns a continuous strip. Adjacent materials share the exact boundary row.
-    const rows = Math.ceil((end - start) / 0.31)
+    const rows = Math.ceil((end - start) / (profile.collisionResolution?.rowSpacing ?? 0.31))
     const vertices: number[] = [], indices: number[] = []
     for (let i = 0; i <= rows; i++) {
       const s = i === rows ? end : start + (end - start) * i / rows
