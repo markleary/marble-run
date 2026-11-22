@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { chromium, webkit } from 'playwright';
+import { chromium, devices, webkit } from 'playwright';
 import { preview } from 'vite';
 import { tsImport } from 'tsx/esm/api';
 import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
 import keplerLayout from '../src/courses/kepler-layout.json' with { type: 'json' };
 
 const url = process.env.MARBLE_URL;
-const server = url ? undefined : await preview({ preview: { host: '127.0.0.1', port: 0 } });
+const base = '/marble-run/';
+const server = url ? undefined : await preview({ base, preview: { host: '127.0.0.1', port: 0 } });
 const address = server?.httpServer.address();
-const game = url ?? 'http://127.0.0.1:' + address.port + '/';
+const game = url ?? 'http://127.0.0.1:' + address.port + base;
 const mobile = process.argv.includes('--mobile');
 const engine = process.env.MARBLE_BROWSER === 'webkit' ? webkit : chromium;
 const browser = await engine.launch({
@@ -18,12 +19,11 @@ const browser = await engine.launch({
   ...(engine === chromium ? { args: ['--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] } : {})
 });
 const output = resolve('test-results', (mobile ? 'mobile' : 'desktop') + (url?.startsWith('https') ? '-live' : ''));
-const page = await browser.newPage({
-  viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
-  deviceScaleFactor: 1,
-  hasTouch: mobile,
-  isMobile: mobile
-});
+const portrait = { width: 390, height: 844 };
+const page = await browser.newPage(mobile ? {
+  ...devices[engine === webkit ? 'iPhone 13' : 'Pixel 7'],
+  viewport: portrait
+} : { viewport: { width: 1440, height: 900 } });
 const issues = [];
 const loadedMusic = new Set();
 page.on('pageerror', error => issues.push(error.message));
@@ -61,7 +61,17 @@ async function assertFullscreen(active) {
 }
 
 async function capture(name) {
-  await page.screenshot({ path: resolve(output, name + '.png') });
+  await page.screenshot({ path: resolve(output, name + '.png'), scale: 'css' });
+}
+
+async function assertCompactOrder(count) {
+  const rows = await page.locator('.running-order li').evaluateAll(items => items.map(item => ({
+    visible: item.getClientRects().length > 0,
+    marked: item.hasAttribute('data-marked')
+  })));
+  assert.equal(rows.length, count);
+  assert.equal(rows.filter(row => row.marked).length, 1);
+  rows.forEach((row, index) => assert.equal(row.visible, index === 0 || row.marked));
 }
 
 function clock(seconds) {
@@ -211,6 +221,22 @@ try {
   }, {winner: previousWinner, mobile});
   await page.goto(game);
   const startButton = page.getByRole('button', { name: 'Start race' });
+  if (mobile && server) {
+    // Relaunch on the Pages subpath with the network disabled, including courses never selected online.
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), undefined, { timeout: 60000 });
+    const manifestUrl = await page.locator('link[rel="manifest"]').evaluate(link => link.href);
+    const manifest = await (await page.request.get(manifestUrl)).json();
+    assert.equal(new URL(manifest.start_url, manifestUrl).href, game);
+    assert.equal(new URL(manifest.scope, manifestUrl).href, game);
+    assert.equal(manifest.display, 'standalone');
+    if (engine === chromium) {
+      const session = await page.context().newCDPSession(page);
+      assert.equal((await session.send('Page.getAppId')).appId, game);
+      await session.detach();
+    }
+    await page.context().setOffline(true);
+    await page.reload();
+  }
   await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false, undefined, { timeout: 90000 });
   await page.evaluate(() => document.fonts.ready);
   const canFullscreen = await page.evaluate(() => document.fullscreenEnabled ?? document.webkitFullscreenEnabled);
@@ -233,6 +259,11 @@ try {
   assert.equal(await nameInput(3).inputValue(), 'Sunbeam');
   assert.equal(await colorInput(3).inputValue(), '1');
   assert.equal(await fieldButton(3).getAttribute('aria-pressed'), 'true');
+  if (mobile) {
+    await nameInput(3).tap();
+    await nameInput(3).press('Enter');
+    assert.equal(await page.locator('body').getAttribute('data-view'), 'setup');
+  }
   await fieldButton(6).click();
   if (mobile) assert.equal(await nameInput(4).inputValue(), 'Old Violet');
   for (let slot = 0; slot < 6; slot++) {
@@ -275,7 +306,8 @@ try {
   assert.equal(await trackButton('Prism Speedway').getAttribute('aria-pressed'), 'true');
   await capture('prism-setup');
   console.log('Captured setup', output);
-  await startButton.click();
+  if (mobile) await startButton.tap();
+  else await startButton.click();
   await page.waitForSelector('body[data-view="race"]', { timeout: 30000, state: 'attached' });
   await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:07.00');
   await assertRacers('.running-order', entrants.slice(0, fieldSize));
@@ -308,6 +340,18 @@ try {
   await capture('frostline-setup');
   await startButton.click();
   await page.waitForSelector('body[data-view="race"]', { timeout: 30000, state: 'attached' });
+  if (mobile) {
+    await assertCompactOrder(frostField);
+    await page.setViewportSize({ width: portrait.height, height: portrait.width });
+    const fullOrder = page.getByRole('button', { name: 'Full running order' });
+    await fullOrder.tap();
+    assert.equal(await fullOrder.getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('.running-order li:visible').count(), frostField);
+    await capture('landscape-racing');
+    await fullOrder.tap();
+    await assertCompactOrder(frostField);
+    await page.setViewportSize(portrait);
+  }
   await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:26.00', undefined, { timeout: 60000 });
   await assertRacers('.running-order', entrants.slice(0, frostField));
   await capture('frostline-racing');

@@ -152,6 +152,7 @@ function pickMarker() {
 
 export class RaceBroadcast {
   private renderer: THREE.WebGLRenderer;
+  private studioLighting?: THREE.WebGLRenderTarget;
   private sun = new THREE.DirectionalLight('#ffecd1', 2.3);
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(35, 1, 0.12, 450);
@@ -182,22 +183,22 @@ export class RaceBroadcast {
 
   constructor(private canvas: HTMLCanvasElement, private track: CourseTrack) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+    const touchScreen = window.matchMedia('(pointer: coarse)').matches;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchScreen ? 1.5 : 1.8));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.93;
-    const environment = new RoomEnvironment();
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(environment, 0.04).texture;
+    this.lightStudio();
+    // Three.js rebuilds the renderer on restore. Re-bake the GPU-only reflection map afterwards.
+    canvas.addEventListener('webglcontextrestored', () => this.lightStudio());
     this.scene.environmentIntensity = 0.55;
-    environment.dispose(); pmrem.dispose();
 
     this.scene.add(new THREE.HemisphereLight('#fff7e4', '#918878', 0.9));
     const sun = this.sun;
     sun.position.set(-18, 38, -22);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.setScalar(touchScreen ? 1024 : 2048);
     sun.shadow.normalBias = 0.026;
     sun.shadow.bias = -0.00032;
     this.scene.add(sun, sun.target);
@@ -210,8 +211,17 @@ export class RaceBroadcast {
     this.marker.scale.set(0.52, 0.31, 1);
     this.scene.add(this.marker);
     this.setCourse(track);
-    new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
+  }
+
+  private lightStudio() {
+    this.studioLighting?.dispose();
+    const environment = new RoomEnvironment();
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.studioLighting = pmrem.fromScene(environment, 0.04);
+    this.scene.environment = this.studioLighting.texture;
+    environment.dispose();
+    pmrem.dispose();
   }
 
   setCourse(track: CourseTrack) {
@@ -284,13 +294,14 @@ export class RaceBroadcast {
     this.preview();
   }
 
-  private resize() {
+  resize() {
     const w = Math.max(1, this.canvas.clientWidth), h = Math.max(1, this.canvas.clientHeight);
     this.renderer.getSize(this.viewSize);
     if (w !== this.viewSize.x || h !== this.viewSize.y) this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.mode === 'preview') this.preview();
+    else if (this.mode === 'grid') this.grid();
   }
 
   private snap() {
