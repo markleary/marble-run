@@ -2,7 +2,7 @@
 
 [Play Prism Speedway](https://markleary.github.io/marble-run/)
 
-Pick a color, name your marble, and race a field of two to four down a tabletop speedway. Four lacquered lanes feed a banked hairpin and a shared wooden finish. The broadcast camera follows the action automatically.
+Set up two to four marbles on one screen. Each player can give their marble a name and choose its color. Four lacquered lanes feed a banked hairpin and a shared wooden finish. The broadcast camera follows the action automatically.
 
 Choose **Race again** to keep the field and draw a fresh starting grid. The results show finish times and gaps, and **Standings** keeps wins by name and color in this browser.
 

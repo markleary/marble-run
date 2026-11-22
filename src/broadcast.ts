@@ -60,7 +60,7 @@ export class RaceBroadcast {
   private ballShape: THREE.SphereGeometry;
   private balls: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhysicalMaterial>[] = [];
   private marker = pickMarker();
-  private favorite = 0;
+  private favorite = -1;
   private gate = new THREE.Group();
   private gateRaised = false;
   private mode: 'preview' | 'grid' | 'race' | 'podium' = 'preview';
@@ -170,7 +170,7 @@ export class RaceBroadcast {
       this.scene.remove(mesh);
       mesh.material.map?.dispose(); mesh.material.dispose();
     }
-    this.favorite = Math.max(0, racers.findIndex(r => r.isPlayer));
+    this.favorite = racers.findIndex(r => r.marked);
     this.balls = racers.map((racer, index) => {
       const group = new THREE.Mesh(this.ballShape,
         new THREE.MeshPhysicalMaterial({ map: marblePaint(racer), roughness: 0.205, metalness: 0.14, clearcoat: 1, clearcoatRoughness: 0.09 }));
@@ -204,7 +204,7 @@ export class RaceBroadcast {
         .lerp(marble.position, alpha);
       mesh.quaternion.copy(marble.previousRotation).slerp(this.q.copy(marble.rotation), alpha);
     }
-    this.marker.visible = this.mode === 'race' || this.mode === 'grid';
+    this.marker.visible = this.favorite >= 0 && (this.mode === 'race' || this.mode === 'grid');
     if (this.balls[this.favorite]) {
       this.marker.position.copy(this.balls[this.favorite].position);
       this.marker.position.y += this.track.radius * 2.5;
