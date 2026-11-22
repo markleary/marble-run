@@ -3,11 +3,15 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { CourseTrack, TrackSample } from './track'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
 import { createFrostlineScenery } from './frostlineScenery'
+import { createTimberScenery } from './timberScenery'
+import { createWireworksScenery } from './wireworksScenery'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
+const scenery = { prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery, wireworks: createWireworksScenery }
+
 export function createCourseScenery(track: CourseTrack): THREE.Group {
-  return track.id === 'frostline' ? createFrostlineScenery(track) : createPrismScenery(track)
+  return scenery[track.id](track)
 }
 
 function createPrismScenery(track: CourseTrack): THREE.Group {

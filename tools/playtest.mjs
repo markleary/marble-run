@@ -22,8 +22,13 @@ const page = await browser.newPage({
   isMobile: mobile
 });
 const issues = [];
+const loadedMusic = new Set();
 page.on('pageerror', error => issues.push(error.message));
-page.on('response', response => { if (response.status() >= 400) issues.push(response.status() + ' ' + response.url()); });
+page.on('response', response => {
+  if (response.status() >= 400) issues.push(response.status() + ' ' + response.url());
+  const music = new URL(response.url()).pathname.match(/\/audio\/music-([a-z]+)\.mp3$/);
+  if (music && response.ok()) loadedMusic.add(music[1]);
+});
 const fieldSize = mobile ? 2 : 6;
 const frostField = mobile ? 5 : 6;
 const entrants = [
@@ -196,6 +201,36 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
+  for (const [title, id, time] of [
+    ['Timber Corkscrew', 'timber', '0:13.00'],
+    ['Wireworks Drop', 'wireworks', '0:25.00'],
+  ]) {
+    await trackButton(title).click();
+    await fieldButton(6).click();
+    await marker.selectOption('5');
+    // Cover both booting a saved course and changing physics/audio in the same session.
+    if (id === 'timber') await page.reload();
+    await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false);
+    assert.equal(await trackButton(title).getAttribute('aria-pressed'), 'true');
+    await assertSetup(6);
+    await capture(id + '-setup');
+    await startButton.click();
+    if (id === 'wireworks') {
+      await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:07.00');
+      await capture('wireworks-rails');
+    }
+    await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 75000 });
+    await assertRacers('.running-order', entrants);
+    assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack on selection and start.');
+    await capture(id + '-racing');
+    await verifyResults(title, 6, 5);
+    await capture(id + '-results');
+    await page.getByRole('button', { name: 'Race again' }).click();
+    await verifyResults(title, 6, 5);
+    await page.getByRole('button', { name: 'Change setup' }).click();
+  }
+  assert.equal(await tally(), 7);
+  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'prism', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -210,7 +245,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed both courses, named entrants, restart, three timed heats, rematch and cumulative podium scoring:', game);
+  console.log('Passed four courses, four soundtrack requests, named entrants, restart, seven timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));
