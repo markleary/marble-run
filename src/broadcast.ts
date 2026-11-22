@@ -61,9 +61,10 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [-4, 5.8, 12], trackRelative: true },
     // Track the balls across the empty span and through first contact down the catch deck.
     { offset: [1.5, 6.6, 17.5], portraitOffset: [5.5, 5.4, 11], trackRelative: true, holdPastEnd: 12 },
-    { offset: [-4, 6.2, 9], trackRelative: true },
-    { offset: [3, 7.8, 10], trackRelative: true },
-    { offset: [-3, 5.2, 9], trackRelative: true },
+    { offset: [-6.2, 7.5, 6.8], trackRelative: true },
+    // Look down the open trough so its high outside shoulder never fills the foreground.
+    { offset: [-7.8, 8.5, 4.8], portraitOffset: [-8.4, 7.1, 3.2], trackRelative: true },
+    { offset: [-5.4, 7.0, 6.8], trackRelative: true },
   ],
 };
 

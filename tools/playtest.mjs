@@ -307,7 +307,7 @@ try {
   const seeds = { orrery: 82, tideglass: 58, kepler: 23 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
-  const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch']);
+  const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
   const jumpShots = {};
   for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne]]) {
     jumpShots[id] = { approach: clock(time - 1), target: clock(time - .04) };
@@ -329,6 +329,7 @@ try {
       [clock(kepler['Gravity Dive']), 'gravity-dive'],
       [jumpShots.kepler.target, 'vacuum-transfer'],
       [clock(kepler['Aurora Catch']), 'aurora-catch'],
+      [clock(kepler['Orbital Return']), 'orbital-return'],
     ]],
   ]) {
     await trackButton(title).click();

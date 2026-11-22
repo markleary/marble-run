@@ -14,7 +14,7 @@ Use the fullscreen button in the top-right corner to expand the game or return t
 | Wireworks Drop | Six pairs of steel rails, two routes around a tower and a banked reunion | Pulsing organ and a mechanical synth groove |
 | Midnight Orrery | Three swinging pendulums, an orbital underpass and two ramp jumps across open gaps | Celesta, bass clarinet and viola in a clockwork ostinato |
 | Tideglass Conservatory | A botanical glasshouse with a winding half-pipe and twin sea-glass sluices | Alto flute and nylon-string guitar in a bossa nova |
-| Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump onto an aurora-glass flume | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
+| Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
 
 Each track has its own instrumental loop. The music sits underneath the rolling marbles, starting gate and finish bell. The speaker button mutes or restores the full mix.
 

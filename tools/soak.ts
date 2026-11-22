@@ -4,7 +4,7 @@ import type { CourseTrack, TrackSample } from '../src/track';
 import { courseIds } from '../src/courses/catalog';
 import timberLayout from '../src/courses/timber-layout.json';
 import wireworksLayout from '../src/courses/wireworks-layout.json';
-import { measureKeplerTransfer } from './check-kepler';
+import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
@@ -197,6 +197,7 @@ for (const id of courseIds) {
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
+  if (id === 'kepler') checkKeplerReceiver(track);
   if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass' || id === 'kepler') checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);

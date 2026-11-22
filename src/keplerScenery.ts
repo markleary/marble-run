@@ -57,6 +57,40 @@ function auroraGlass() {
   return mat
 }
 
+function auroraShell(track: CourseTrack, start: number, glass: Material) {
+  const bands = 48, rows = Math.ceil((track.length - start) / .31)
+  const shape = new THREE.PlaneGeometry(1, 1, bands, rows)
+  const positions = shape.getAttribute('position'), uv = shape.getAttribute('uv')
+  const color = new Float32Array(positions.count * 4).fill(1)
+  const step = 2 * track.halfWidth / bands
+  for (let row = 0; row <= rows; row++) {
+    const s = start + (track.length - start) * row / rows
+    let previousHeight = 0, arc = 0
+    for (let col = 0; col <= bands; col++) {
+      const index = row * (bands + 1) + col
+      const p = track.sample(s, track.halfWidth - col * step)
+      positions.setXYZ(index, p.x, p.y, p.z)
+      if (col) arc += Math.hypot(step, p.y - previousHeight)
+      uv.setXY(index, s / 4, arc / 1.6)
+      previousHeight = p.y
+    }
+    // The continuous pane is frosted under the marbles and clears as its sides
+    // rise. Measuring across the glass keeps the honeycomb regular on the curve.
+    for (let col = 0; col <= bands; col++) {
+      const first = row * (bands + 1), a = Math.max(0, col - 1), b = Math.min(bands, col + 1)
+      const deltaY = positions.getY(first + b) - positions.getY(first + a)
+      const slope = Math.abs(deltaY) / ((b - a) * step)
+      color[(first + col) * 4 + 3] = 1 - .78 * THREE.MathUtils.smoothstep(slope, .32, 1.65)
+    }
+  }
+  shape.setAttribute('color', new THREE.BufferAttribute(color, 4))
+  shape.computeVertexNormals()
+  glass.vertexColors = true
+  const mesh = new THREE.Mesh(shape, glass)
+  mesh.receiveShadow = true
+  return mesh
+}
+
 function illuminated(color: string) {
   const mat = material(color, .29, .13)
   mat.emissive.set(color); mat.emissiveIntensity = .57
@@ -136,64 +170,69 @@ export function createKeplerScenery(track: CourseTrack, onReady?: () => void) {
   }
   const ribbon = (m: Material, a: number, b: number, l: number, r: number, y: number, bands = 1) =>
     batch.surface(m, a, b, (s, t) => at(s, l + t * (r - l), y), Math.abs(r - l), bands)
+  const belowGlass = (s: number, lateral: number, depth: number) => {
+    const p = track.sample(s, lateral), left = Math.max(-w, lateral - .035), right = Math.min(w, lateral + .035)
+    const slope = (track.sample(s, right).y - track.sample(s, left).y) / (right - left)
+    const down = depth / Math.hypot(1, slope)
+    return v(p.x + p.rx * slope * down, p.y - down, p.z + p.rz * slope * down)
+  }
 
   addKeplerSky(group, track.sample(takeoff), onReady)
   const scan = addKeplerStation(group, track, batch, hull, frame, gold, ice)
 
-  for (const [start, end, optical] of [[0, takeoff, false], [landing, track.length, true]] as const) {
-    if (optical) ribbon(glass, start, end, -w, w, 0, 22)
-    else {
-      const gate = track.sections[0]
-      ribbon(tiles, 0, gate.end, -w, w, 0, 48)
-      ribbon(tiles, gate.end, diveStart, -w, w, 0, 14)
-      ribbon(carbon, diveStart, takeoff, -w, w, 0, 16)
-      ribbon(frame, start, end, -w, w, -.44, 10)
+  // Ceramic hull and box-section beams finish at the transfer lip.
+  const gate = track.sections[0]
+  ribbon(tiles, 0, gate.end, -w, w, 0, 48)
+  ribbon(tiles, gate.end, diveStart, -w, w, 0, 14)
+  ribbon(carbon, diveStart, takeoff, -w, w, 0, 16)
+  ribbon(frame, 0, takeoff, -w, w, -.44, 10)
+  for (const side of [-1, 1]) {
+    batch.strip(hull, 0, takeoff, (s, k) => rim(s, side, k ? .15 : 0, k ? -.38 : .025), .44)
+    batch.strip(frame, 0, takeoff, (s, k) => rim(s, side, k ? .05 : .15, k ? -.80 : -.38), .42)
+    batch.strip(copper, 0, takeoff, (s, k) => rim(s, side, .155, k ? -.39 : -.48), .10)
+    batch.strip(pane, 0, takeoff, (s, k) => rim(s, side, .025, k ? track.wallHeight(s) : .11), .8)
+    batch.strip(frame, 0, takeoff, (s, k) => rim(s, side, k ? .11 : -.039, track.wallHeight(s)), .15)
+    batch.strip(hull, 0, takeoff, (s, k) => rim(s, side, .105, track.wallHeight(s) - (k ? .014 : .068)), .054)
+    ribbon(frame, 0, takeoff, side * (w - .32), side * (w - .23), .012)
+    for (let s = .12, i = 0; s < takeoff; s += 3, i++) {
+      batch.rod(frame, rim(s, side, .03, -.11), rim(s, side, .03, track.wallHeight(s)), .052, 6)
+      batch.strip(i % 3 ? hull : amber, s, Math.min(s + .88, takeoff), (d, k) => rim(d, side, .022, track.wallHeight(d) * .52 + k * .12), .12)
+      if (s + .7 < takeoff) ribbon(copper, s + .12, s + .7, side * (w - .55), side * (w - .38), .015)
     }
-    // The ceramic hull is box-section. The optical deck rides on an open ladder truss.
+  }
+  for (let s = .2; s < takeoff - .12; s += 5.3) {
+    const bottom = Math.min(...Array.from({ length: 17 }, (_, i) => track.sample(s, (i / 8 - 1) * w).y))
+    const a = rim(s, -1, -.30, 0), b = rim(s, 1, -.30, 0)
+    a.y = b.y = bottom - .95
+    batch.rod(frame, a, b, .18)
     for (const side of [-1, 1]) {
-      const high = (s: number) => track.wallHeight(s)
-      if (!optical) {
-        batch.strip(hull, start, end, (s, k) => rim(s, side, k ? .15 : 0, k ? -.38 : .025), .44)
-        batch.strip(frame, start, end, (s, k) => rim(s, side, k ? .05 : .15, k ? -.80 : -.38), .42)
-        batch.strip(copper, start, end, (s, k) => rim(s, side, .155, k ? -.39 : -.48), .10)
-      } else {
-        batch.strip(well, start, end, (s, k) => rim(s, side, .07, k ? .016 : -.15), .165)
-        batch.strip(ice, start, end, (s, k) => rim(s, side, .075, k ? -.045 : -.082), .037)
-      }
-      // Transparent upper shields preserve the view of the marbles on the receiving bank.
-      batch.strip(pane, start, end, (s, k) => rim(s, side, .025, k ? high(s) : .11), .8)
-      batch.strip(optical ? well : frame, start, end, (s, k) => rim(s, side, k ? .11 : -.039, high(s)), .15)
-      batch.strip(optical ? ice : hull, start, end, (s, k) => rim(s, side, .105, high(s) - (k ? .014 : .068)), .054)
-      ribbon(optical ? ice : frame, start, end, side * (w - .32), side * (w - .23), .012)
-      for (let s = start + .12, i = 0; s < end; s += 3.0, i++) {
-        const next = Math.min(s + 3.0, end)
-        batch.rod(optical ? titanium : frame, rim(s, side, .03, -.11), rim(s, side, .03, high(s)), .052, 6)
-        if (optical) {
-          const lower = rim(s, side, -.35, -.92)
-          batch.rod(titanium, lower, rim(next, side, -.35, -.92), .075)
-          batch.rod(well, lower, rim(next, side, .028, -.14), .089)
-          batch.rod(titanium, rim(s, side, .028, -.14), lower, .073)
-        } else {
-          batch.strip(i % 3 ? hull : amber, s, Math.min(s + .88, end), (d, k) => rim(d, side, .022, high(d) * .52 + k * .12), .12)
-        }
-        if (s + .7 < end) ribbon(optical ? ice : copper, s + .12, s + .7, side * (w - .55), side * (w - .38), .015)
-      }
+      const shoulder = rim(s, side, -.30, -.36), foot = shoulder.clone()
+      foot.y = bottom - .94
+      batch.rod(titanium, shoulder, foot, .13, 6)
     }
-    for (let s = start + .2; s < end - .12; s += optical ? 3.0 : 5.3) {
-      // Cross members follow the underside of the cupped deck and stay clear of the centerline.
-      const bottom = Math.min(...Array.from({ length: 17 }, (_, i) => track.sample(s, (i / 8 - 1) * w).y))
-      const a = rim(s, -1, -.30, 0), b = rim(s, 1, -.30, 0)
-      a.y = b.y = bottom - (optical ? .72 : .95)
-      batch.rod(optical ? titanium : frame, a, b, optical ? .082 : .18)
-      if (!optical) {
-        for (const side of [-1, 1]) {
-          const shoulder = rim(s, side, -.30, -.36), foot = shoulder.clone()
-          foot.y = bottom - .94
-          batch.rod(titanium, shoulder, foot, .13, 6)
-        }
-        const p = track.sample(s)
-        batch.box(ablator, v(p.x, bottom - .68, p.z), [.51, .42, 2 * w - .40], -Math.atan2(p.tz, p.tx))
-      }
+    const p = track.sample(s)
+    batch.box(ablator, v(p.x, bottom - .68, p.z), [.51, .42, 2 * w - .40], -Math.atan2(p.tz, p.tx))
+  }
+
+  // A slim clear lip caps each shoulder. Curved saddles carry the glass on
+  // paired keels beneath the trough so the sides stay clear of heavy bracing.
+  group.add(auroraShell(track, landing, glass))
+  const keel = (s: number, side: number) => belowGlass(s, side * w * .29, .62)
+  for (const side of [-1, 1]) {
+    batch.strip(titanium, landing, track.length, (s, k) => rim(s, side, .025, k ? .008 : -.068), .076)
+    batch.strip(pane, landing, track.length, (s, k) => rim(s, side, .025, k ? track.wallHeight(s) : .008), .42)
+    batch.strip(ice, landing, track.length, (s, k) => rim(s, side, k ? .056 : .012, track.wallHeight(s)), .044)
+  }
+  for (let s = landing + .12, i = 0; s < track.length; s += 3, i++) {
+    const next = Math.min(s + 3, track.length)
+    batch.surface(titanium, s - .058, Math.min(s + .058, track.length), (d, t) =>
+      belowGlass(d, (2 * t - 1) * w, .15), 2 * w, 40)
+    for (const side of [-1, 1]) {
+      batch.rod(well, keel(s, side), keel(next, side), .077)
+      batch.rod(titanium, belowGlass(s, side * w * .29, .14), keel(s, side), .067, 6)
+      if (i % 2 === 0) batch.rod(titanium, keel(s, side), keel(next, -side), .045)
+      batch.rod(titanium, rim(s, side, .032, -.04), rim(s, side, .032, track.wallHeight(s)), .027, 6)
+      if (s + .39 < track.length) ribbon(ice, s + .12, s + .39, side * (w - .25), side * (w - .20), .025)
     }
   }
   // The telemetry instrument is printed directly onto the bank: its two traces
