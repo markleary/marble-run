@@ -251,7 +251,9 @@ export class RaceBroadcast {
       case 5: offset = [4.8, 4.5, 8.3]; break;
       case 6: {
         const line = this.track.sample(this.track.finishS - 0.35);
-        this.focusGoal.set(line.x, line.y + 0.4, line.z);
+        // Pan with the approach, then hold the timing stripe once the pack is in frame.
+        const lock = THREE.MathUtils.smoothstep(center, this.track.finishS - 7.5, this.track.finishS - 1.8);
+        this.focusGoal.lerp(new THREE.Vector3(line.x, line.y + 0.4, line.z), lock);
         offset = [1.8, 3.9, 8.8]; break;
       }
       default: offset = [4.5, 4.2, -7.8];
