@@ -5,6 +5,7 @@ import { courseIds } from '../src/courses/catalog';
 import timberLayout from '../src/courses/timber-layout.json';
 import wireworksLayout from '../src/courses/wireworks-layout.json';
 import { checkWireworksContacts } from './check-wireworks';
+import { checkOrreryCrossing, checkOrreryJumps } from './check-orrery';
 import { initPhysics, RaceSimulation } from '../src/simulation';
 
 const repetitions = Number(process.argv[2] ?? 100);
@@ -18,8 +19,10 @@ function exerciseField(track: CourseTrack, count: number) {
   const wins = Array<number>(track.laneCount).fill(0);
   const starts = Array<number>(track.laneCount).fill(0);
   const durations: number[] = [];
-  const forkMidpoint = (wireworksLayout.forkStart + wireworksLayout.forkEnd) / 2;
-  const forkCenter = track.sample(forkMidpoint);
+  const sluice = track.sections.find(section => section.name === 'Twin Frond Sluice');
+  const branchMidpoint = track.id === 'wireworks' ? (wireworksLayout.forkStart + wireworksLayout.forkEnd) / 2
+    : sluice ? (sluice.start + sluice.end) / 2 : undefined;
+  const branchCenter = branchMidpoint === undefined ? undefined : track.sample(branchMidpoint);
   const branchStarts = [0, 0], branchWins = [0, 0];
   let replayFinishTimes: (number | null)[] | undefined;
 
@@ -38,11 +41,11 @@ function exerciseField(track: CourseTrack, count: number) {
       const branches = new Map<number, number>();
       while (!race.finished && !race.failure) {
         race.step();
-        if (track.id === 'wireworks' && branches.size < count) {
+        if (branchCenter && branchMidpoint !== undefined && branches.size < count) {
           for (const marble of race.marbles) {
-            if (marble.distance < forkMidpoint || branches.has(marble.id)) continue;
+            if (marble.distance < branchMidpoint || branches.has(marble.id)) continue;
             const { x, z } = marble.position;
-            const lateral = (x - forkCenter.x) * forkCenter.rx + (z - forkCenter.z) * forkCenter.rz;
+            const lateral = (x - branchCenter.x) * branchCenter.rx + (z - branchCenter.z) * branchCenter.rz;
             const branch = lateral < 0 ? 0 : 1;
             branches.set(marble.id, branch);
             branchStarts[branch]++;
@@ -67,7 +70,7 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.deepEqual(race.marbles.map(m => m.finishTime), replayFinishTimes);
         }
         wins[finishers[0].slot]++;
-        if (track.id === 'wireworks') {
+        if (branchCenter) {
           assert.equal(branches.size, count);
           branchWins[branches.get(finishers[0].id)!]++;
         }
@@ -80,7 +83,7 @@ function exerciseField(track: CourseTrack, count: number) {
   console.log(JSON.stringify({
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
-    ...(track.id === 'wireworks' && { branchStarts, branchWins }),
+    ...(branchCenter && { branchStarts, branchWins }),
   }));
   if (replayFinishTimes) {
     const replay = new RaceSimulation(track, count, firstSeed);
@@ -130,8 +133,12 @@ for (const id of courseIds) {
   if (courseFilter && id !== courseFilter) continue;
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
-  if (id === 'frostline' || id === 'timber') checkSectionStarts(track);
+  if (id === 'frostline' || id === 'timber' || id === 'orrery' || id === 'tideglass') checkSectionStarts(track);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
+  if (id === 'orrery') {
+    checkOrreryCrossing(track);
+    checkOrreryJumps(track, firstSeed);
+  }
 }
 assert.equal(failures, 0, failures + ' heats failed; see the courses and seeds above.');

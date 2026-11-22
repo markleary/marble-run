@@ -3,6 +3,8 @@ import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { preview } from 'vite';
+import { tsImport } from 'tsx/esm/api';
+import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
 
 const url = process.env.MARBLE_URL;
 const server = url ? undefined : await preview({ preview: { host: '127.0.0.1', port: 0 } });
@@ -51,6 +53,45 @@ async function capture(name) {
   await page.screenshot({ path: resolve(output, name + '.png') });
 }
 
+function clock(seconds) {
+  const hundredths = Math.round(seconds * 100);
+  const remainder = (hundredths % 6000) / 100;
+  return Math.floor(hundredths / 6000) + ':' + remainder.toFixed(2).padStart(5, '0');
+}
+
+// Rehearse the featured grids so screenshots follow course landmarks after tuning.
+async function landmarkTimes(id, seed, sections) {
+  const { buildTrack } = await tsImport('../src/track.ts', import.meta.url);
+  const { RaceSimulation, initPhysics } = await tsImport('../src/simulation.ts', import.meta.url);
+  await initPhysics();
+  const track = buildTrack(id);
+  const marks = sections.map(name => {
+    const section = track.sections.find(section => section.name === name);
+    assert.ok(section, id + ' is missing the ' + name + ' camera section.');
+    return [name, (section.start + section.end) / 2];
+  });
+  if (id === 'orrery') {
+    const { takeoff, landing } = orreryLayout.jumps[0];
+    marks.push(['Airborne', (takeoff + landing) / 2]);
+  }
+  marks.sort((a, b) => a[1] - b[1]);
+  const heat = new RaceSimulation(track, 6, seed);
+  const times = {};
+  try {
+    heat.release();
+    for (const [name, distance] of marks) {
+      while (!heat.failure && !heat.finished && heat.marbles.every(marble => marble.distance < distance)) {
+        heat.step();
+      }
+      assert.ok(!heat.failure && !heat.finished, name + ' rehearsal failed: ' + heat.failure);
+      times[name] = heat.elapsed;
+    }
+    return times;
+  } finally {
+    heat.dispose();
+  }
+}
+
 async function assertRacers(list, active) {
   const rows = await page.locator(list + ' li').evaluateAll(items => items.map(item => ({
     text: item.textContent,
@@ -72,7 +113,9 @@ async function assertSetup(size) {
 }
 
 async function verifyResults(track, count, marked) {
-  await page.waitForSelector('body[data-view="results"]', { timeout: 150000, state: 'attached' });
+  await page.waitForSelector('body[data-view="results"], body[data-view="failure"]', { timeout: 150000, state: 'attached' });
+  const failure = await page.locator('.failure-message').allTextContents();
+  assert.deepEqual(failure, [], track + ' heat failed: ' + failure.join(' '));
   assert.equal(await page.locator('.result-course').innerText(), track);
   await assertRacers('.finish-order', entrants.slice(0, count));
   await assertMarked('.finish-order', marked);
@@ -88,6 +131,7 @@ async function verifyResults(track, count, marked) {
     if (index === 0) score.wins++;
     expectedScores.set(result.name, score);
   });
+  console.log('Verified', track, 'with', count, 'finishers');
 }
 
 async function assertMarked(list, slot) {
@@ -97,6 +141,33 @@ async function assertMarked(list, slot) {
 }
 try {
   await mkdir(output, { recursive: true });
+  await page.addInitScript(() => {
+    // Music is the only looping buffer longer than the four-second rolling sounds.
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      start.apply(this, args);
+      if (this.loop && this.buffer?.duration > 10) window.playtestMusicStarted = true;
+    };
+  });
+  // Keep the fixed physics steps. Fast runs take several per frame, and a
+  // designated action shot holds its race clock while Playwright captures it.
+  await page.addInitScript(fast => {
+    const frame = window.requestAnimationFrame.bind(window);
+    let lastFrame = 0, gameTime = 0;
+    window.requestAnimationFrame = callback => frame(time => {
+      if (time !== lastFrame) {
+        let step = (time - lastFrame) * (fast ? 6 : 1);
+        if (window.playtestActionShot) {
+          const clock = document.querySelector('.race-clock')?.textContent;
+          const { approach, target } = window.playtestActionShot;
+          if (clock >= approach) step = clock >= target ? 0 : Math.min(step, 1000 / 60);
+        }
+        gameTime += step;
+        lastFrame = time;
+      }
+      callback(gameTime);
+    });
+  }, process.argv.includes('--fast'));
   // Exercise an existing installation's first visit after the roster update.
   await page.addInitScript(({winner, mobile}) => {
     if (sessionStorage.getItem('playtest-initialized')) return;
@@ -201,36 +272,66 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  for (const [title, id, time] of [
-    ['Timber Corkscrew', 'timber', '0:13.00'],
-    ['Wireworks Drop', 'wireworks', '0:25.00'],
+  const seeds = { orrery: 82, tideglass: 58 };
+  const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
+  const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
+  const jumpShot = { approach: clock(orrery.Airborne - 1), target: clock(orrery.Airborne - .04) };
+  for (const [title, id, shots] of [
+    ['Timber Corkscrew', 'timber', [['0:13.00', 'racing']]],
+    ['Wireworks Drop', 'wireworks', [['0:07.00', 'rails'], ['0:25.00', 'racing']]],
+    ['Midnight Orrery', 'orrery', [
+      [clock(orrery['Escapement Gallery']), 'escapement'],
+      [clock(orrery['Ecliptic Underpass']), 'underpass'],
+      [jumpShot.target, 'comet-skips'],
+    ]],
+    ['Tideglass Conservatory', 'tideglass', [
+      [clock(tideglass['Standing Wave Gallery']), 'standing-wave'],
+      [clock(tideglass['Twin Frond Sluice']), 'twin-sluice'],
+    ]],
   ]) {
     await trackButton(title).click();
     await fieldButton(6).click();
     await marker.selectOption('5');
     // Cover both booting a saved course and changing physics/audio in the same session.
-    if (id === 'timber') await page.reload();
+    if (id !== 'wireworks') await page.reload();
     await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false);
     assert.equal(await trackButton(title).getAttribute('aria-pressed'), 'true');
     await assertSetup(6);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await capture(id + '-setup');
-    await startButton.click();
-    if (id === 'wireworks') {
-      await page.waitForFunction(() => document.querySelector('.race-clock')?.textContent >= '0:07.00');
-      await capture('wireworks-rails');
+    await page.evaluate(() => { window.playtestMusicStarted = false; });
+    if (id in seeds) {
+      // Apply the rehearsed grid once. The rematch still draws a random grid.
+      await page.evaluate(({ seed, shot }) => {
+        const randomValues = crypto.getRandomValues.bind(crypto);
+        crypto.getRandomValues = array => {
+          if (array instanceof Uint32Array && array.length === 1) {
+            delete crypto.getRandomValues;
+            array[0] = seed;
+            return array;
+          }
+          return randomValues(array);
+        };
+        window.playtestActionShot = shot;
+      }, { seed: seeds[id], shot: id === 'orrery' ? jumpShot : undefined });
     }
-    await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 75000 });
+    await startButton.click();
+    for (const [time, shot] of shots) {
+      await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 90000 });
+      await capture(id + '-' + shot);
+    }
+    if (id === 'orrery') await page.evaluate(() => { delete window.playtestActionShot; });
     await assertRacers('.running-order', entrants);
-    assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack on selection and start.');
-    await capture(id + '-racing');
+    assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
+    assert.ok(await page.evaluate(() => window.playtestMusicStarted), title + ' must play a decoded music loop.');
     await verifyResults(title, 6, 5);
     await capture(id + '-results');
     await page.getByRole('button', { name: 'Race again' }).click();
     await verifyResults(title, 6, 5);
     await page.getByRole('button', { name: 'Change setup' }).click();
   }
-  assert.equal(await tally(), 7);
-  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'prism', 'timber', 'wireworks']);
+  assert.equal(await tally(), 11);
+  assert.deepEqual([...loadedMusic].sort(), ['frostline', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -245,7 +346,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed four courses, four soundtrack requests, named entrants, restart, seven timed heats and cumulative podium scoring:', game);
+  console.log('Passed six courses, six soundtrack requests, named entrants, restart, eleven timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

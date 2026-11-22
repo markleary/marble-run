@@ -146,13 +146,14 @@ async function boot() {
       } else if (heat.elapsed - lastHUD >= 0.08) {
         lastHUD = heat.elapsed; ui.updateRace(heat.elapsed, ordered());
         const active = heat.marbles.filter(m => m.finishTime === null);
-        const surfaces = { lacquer: 0, wood: 0, ice: 0, wire: 0 };
+        const surfaces = { lacquer: 0, wood: 0, ice: 0, wire: 0, glass: 0 };
         let rolling = 0, speed = 0;
         for (const marble of active) {
           const surface = heat.rollingSurface(marble);
           if (surface) { surfaces[surface]++; speed += marble.speed; rolling++; }
         }
-        if (rolling) sound.rolling(speed / rolling, surfaces.wood / rolling, surfaces.ice / rolling, surfaces.wire / rolling);
+        // The polished glass flume blends the smooth lacquer roll with a little ice hiss.
+        if (rolling) sound.rolling(speed / rolling, surfaces.wood / rolling, (surfaces.ice + 0.3 * surfaces.glass) / rolling, surfaces.wire / rolling);
         else sound.stopRolling();
       }
       broadcast!.update(heat.marbles, Math.min(1, accumulator / FIXED_DT), dt, heat.elapsed);

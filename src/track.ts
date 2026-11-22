@@ -2,6 +2,8 @@ import prism from './courses/prism-layout.json'
 import frostline from './courses/frostline-layout.json'
 import { buildTimberTrack } from './courses/timber'
 import { buildWireworksTrack } from './courses/wireworks'
+import { buildOrreryTrack } from './courses/orrery'
+import { buildTideglassTrack } from './courses/tideglass'
 import type { CourseId } from './courses/catalog'
 
 import { bankAt, buildCourse, clamp, ease, launchTrim } from './courseGeometry'
@@ -62,5 +64,8 @@ function frostProfile(pieces: PathPiece[]): Profile {
 
 export const buildPrismTrack = () => buildCourse('prism', prism, prismProfile)
 export const buildFrostlineTrack = () => buildCourse('frostline', frostline, frostProfile)
-const builders = { prism: buildPrismTrack, frostline: buildFrostlineTrack, timber: buildTimberTrack, wireworks: buildWireworksTrack }
+const builders = {
+  prism: buildPrismTrack, frostline: buildFrostlineTrack, timber: buildTimberTrack,
+  wireworks: buildWireworksTrack, orrery: buildOrreryTrack, tideglass: buildTideglassTrack,
+}
 export const buildTrack = (id: CourseId) => builders[id]()

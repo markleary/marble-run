@@ -1,0 +1,110 @@
+{
+  "seed": 1414087749,
+  "origin": {
+    "x": -25,
+    "z": -21,
+    "angle": 0
+  },
+  "laneCount": 6,
+  "halfWidth": 4.1,
+  "startS": 1.1,
+  "finishS": 182.91882247727634,
+  "sections": [
+    {
+      "name": "Palm Court Gate",
+      "start": 0,
+      "end": 14
+    },
+    {
+      "name": "Propagation Esses",
+      "start": 14,
+      "end": 36.82300767579509
+    },
+    {
+      "name": "Lily Basin",
+      "start": 36.82300767579509,
+      "end": 66.66813788489813
+    },
+    {
+      "name": "Standing Wave Gallery",
+      "start": 66.66813788489813,
+      "end": 103.66813788489813
+    },
+    {
+      "name": "Fernbank Turn",
+      "start": 103.66813788489813,
+      "end": 132.72786993060373
+    },
+    {
+      "name": "Twin Frond Sluice",
+      "start": 132.72786993060373,
+      "end": 153.72786993060373
+    },
+    {
+      "name": "Mist Garden",
+      "start": 153.72786993060373,
+      "end": 168.31882247727634
+    },
+    {
+      "name": "Estuary Landing",
+      "start": 168.31882247727634,
+      "end": 187.31882247727634
+    }
+  ],
+  "runs": [
+    {
+      "length": 14,
+      "curvature": 0
+    },
+    {
+      "length": 6.911503837897546,
+      "curvature": 0.09090909090909091
+    },
+    {
+      "length": 6.911503837897546,
+      "curvature": -0.09090909090909091
+    },
+    {
+      "length": 9,
+      "curvature": 0
+    },
+    {
+      "length": 29.845130209103036,
+      "curvature": 0.10526315789473684
+    },
+    {
+      "length": 37,
+      "curvature": 0
+    },
+    {
+      "length": 29.059732045705587,
+      "curvature": -0.10810810810810811
+    },
+    {
+      "length": 21,
+      "curvature": 0
+    },
+    {
+      "length": 7.2954762733362974,
+      "curvature": -0.09090909090909091
+    },
+    {
+      "length": 7.2954762733362974,
+      "curvature": 0.09090909090909091
+    },
+    {
+      "length": 19,
+      "curvature": 0
+    }
+  ],
+  "waveTravel": 1.895072966516018,
+  "waveCycles": 1.4184018346434457,
+  "launchTrims": [
+    1.1,
+    0.85,
+    0.64,
+    0.48,
+    0.28,
+    0.1
+  ]
+}

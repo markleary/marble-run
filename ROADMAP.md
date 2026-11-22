@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All four courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All six courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -8,6 +8,8 @@ All four courses support two to six named racers and use fixed, pre-generated la
 | Timber Corkscrew | Playable | Cabinetmaker’s bench | Open wooden helix around a drum | 35–50 seconds |
 | Wireworks Drop | Playable | Metalworking exhibit | Wire descent followed by two competing routes | 40–55 seconds |
 | Frostline Rally | Playable | Snowy village square | Low-friction ice sweeper and a deflector field | 40–60 seconds |
+| Midnight Orrery | Playable | Tabletop observatory | Pendulum gallery, orbital underpass and two Comet Skips jumps | 51–78 seconds |
+| Tideglass Conservatory | Playable | Coastal botanical glasshouse | Standing-wave half-pipe and twin molded sluices | 54–68 seconds |
 
 ## Prism Speedway
 
@@ -44,6 +46,20 @@ The wider grid keeps the original sequence of rollers, opposing banks and timber
 **Progress and cameras.** An elevated three-quarter shot follows the S-bend. A fixed camera frames the slalom across the track in landscape and along its length in portrait. A side view covers the bridge. Track downhill progress through the wide deflector field without awarding places to marbles that bounce sideways across adjacent rows. Use dark trim at the track edges for contrast against snow.
 
 **Acceptance.** The 500 seeded release heats finished in 38–63 seconds, including 100 six-player heats in 41–60 seconds. Verify a marble starting almost at rest can clear each transition. Test two-marble pinches at deflectors and a full six-marble pack at the skating turn. Compare speeds exiting the ice and wood sections. Check pale marble visibility, shadow cost and timing-stripe readability on a phone viewport.
+
+## Midnight Orrery
+
+The 201-unit race descends around a miniature solar system. Three brass pendulums swing across the Escapement Gallery at different rates. After the Retrograde Hairpin, marbles pass beneath the gallery on the Ecliptic Underpass. At Comet Skips, two curved ramps launch them across open gaps onto lower catch decks. Transparent side shields guide off-center landings. The production soundtrack pairs celesta with bass clarinet and viola.
+
+**Cameras and acceptance.** A fixed shot frames all three pendulums. A low camera looks through the underpass, and a side view follows both jumps through the second landing. The simulation drives the visible pendulums and their kinematic colliders from the race clock. Check that replaying a seed reproduces its finish times and that the crossing resolves to the correct deck. At each jump, verify that every marble in a six-player heat rises without track contact, descends and regains contact on the receiving deck.
+
+All 1,000 seeded heats finished in 50.58–77.71 seconds, and every grid slot won at every field size. In 100 six-marble heats, all 1,200 jumps landed. Airborne time ranged from 0.87–1.33 seconds on the first jump and 0.93–1.55 seconds on the second.
+
+## Tideglass Conservatory
+
+Six wooden chutes feed the 182-unit glasshouse race. The Propagation Esses lead around Lily Basin into the Standing Wave Gallery, where the low point of the half-pipe moves from side to side along the flume. A marble can climb a shoulder and fall back through the trough. Beyond Fernbank Turn, a raised glass ridge curves inward from the outside racing line to form the Twin Frond Sluice. The ridge tapers away before the Mist Garden and wooden Estuary Landing. Alto flute and nylon-string guitar carry the bossa nova soundtrack.
+
+**Cameras and acceptance.** Follow the outside of the two basin turns and look across the trough from the open side of the glasshouse. Keep both sluices in view as the pack separates and rejoins. All 500 seeded heats finished in 54.41–68.05 seconds. Both sluices and every starting slot produced winners at each field size. Six-marble packs also cleared the course from rest at each section entrance.
 
 ## Adding courses to the game
 

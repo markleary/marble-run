@@ -1,6 +1,6 @@
 import type { CourseId } from './courses/catalog'
 
-export type CourseSurface = 'lacquer' | 'wood' | 'ice' | 'wire'
+export type CourseSurface = 'lacquer' | 'wood' | 'ice' | 'wire' | 'glass'
 
 /** Distances follow the horizontal centerline; positive lateral points to its right. */
 export interface TrackSample {

@@ -5,12 +5,19 @@ import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTe
 import { createFrostlineScenery } from './frostlineScenery'
 import { createTimberScenery } from './timberScenery'
 import { createWireworksScenery } from './wireworksScenery'
+import { createOrreryScenery } from './orreryScenery'
+import { createTideglassScenery } from './tideglassScenery'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
-const scenery = { prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery, wireworks: createWireworksScenery }
+const scenery = {
+  prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery,
+  wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery,
+}
 
-export function createCourseScenery(track: CourseTrack): THREE.Group {
+export type CourseScenery = THREE.Group & { setRaceTime?(seconds: number): void }
+
+export function createCourseScenery(track: CourseTrack): CourseScenery {
   return scenery[track.id](track)
 }
 
