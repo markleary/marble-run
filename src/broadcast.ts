@@ -5,7 +5,7 @@ import type { MarbleState } from './simulation';
 import { FIXED_DT } from './simulation';
 import type { CourseTrack } from './track';
 import type { CourseId } from './courses/catalog';
-import type { RaceCheckpoint } from './cruxCompetition';
+import type { RaceCheckpoint } from './checkpointRace';
 import { cruxJumps } from './courses/crux';
 import { cruxObstacleBoards, type CruxBoardId } from './courses/cruxObstacles';
 import { cruxRack } from './courses/cruxCheckpoints';
@@ -13,6 +13,9 @@ import { createCourseScenery, type CourseScenery } from './scenery';
 import keplerNebula from './assets/kepler-nebula.jpg';
 import { createKeplerTrails } from './keplerTrails';
 import { keplerStars } from './keplerStars';
+import { spectralPaint, spectralReflections } from './spectralMarbles';
+import { spectralTurbine } from './spectralArena';
+import { spectralOffset } from './courses/spectral';
 
 type Offset = [number, number, number];
 interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean; holdPastEnd?: number }
@@ -72,6 +75,18 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [2, 8, 10], trackRelative: true }, { offset: [4, 10, 10] },
     { offset: [-4, 8, 9] }, { offset: [4, 6, 10] },
   ],
+  spectral: [
+    { offset: [10, 4.5, 3.3], portraitOffset: [10.4, 4.2, .8], trackRelative: true },
+    { offset: [-6.3, 5.5, 6.4], trackRelative: true },
+    { offset: [-7.2, 16.2, -.8], trackRelative: true },
+    { offset: [-6.8, 6.9, 6.3], trackRelative: true },
+    { offset: [-1.9, 8.5, -8.4], trackRelative: true },
+    { offset: [-7.4, 5.8, 6.4], trackRelative: true },
+    { offset: [-3.2, 10.3, 9.3], trackRelative: true },
+    { offset: [-6.7, 6.9, 6.3], trackRelative: true },
+    { offset: [-6.5, 8.8, -6.3], trackRelative: true },
+    { offset: [-6.6, 5.5, 6.4], trackRelative: true },
+  ],
   kepler: [
     { offset: [4, 5.5, 10], trackRelative: true },
     { offset: [-4, 7.5, 10], trackRelative: true },
@@ -96,6 +111,7 @@ const settings: Record<CourseId, { sky: string; fog: string; haze: number; previ
   orrery: { sky: '#17283c', fog: '#293c55', haze: 0.003, preview: [0.52, 1.05, 1.27], finishApproach: 2.8 },
   crux: { sky: '#d0d9d6', fog: '#cad4d0', haze: 0.00165, preview: [0.49, 1.06, 1.44] },
   tideglass: { sky: '#cbe1d3', fog: '#d1e2d8', haze: 0.0042, preview: [0.48, 1.28, 1.45] },
+  spectral: { sky: '#090f21', fog: '#141c37', haze: .0034, preview: [.82, 1.16, 1.28] },
   kepler: { sky: '#070b18', fog: '#18203c', haze: 0.0014, preview: [-0.53, 0.85, 1.38] },
 };
 
@@ -170,6 +186,8 @@ export class RaceBroadcast {
   private eyes = new THREE.Vector3();
   private positionGoal = new THREE.Vector3();
   private focusGoal = new THREE.Vector3();
+  private previousFocusGoal = new THREE.Vector3();
+  private displayDistances: number[] = [];
   private q = new THREE.Quaternion();
   private ballShape: THREE.SphereGeometry;
   private balls: THREE.Mesh<THREE.SphereGeometry, THREE.MeshPhysicalMaterial>[] = [];
@@ -178,6 +196,8 @@ export class RaceBroadcast {
   private gate = new THREE.Group();
   private scenery?: CourseScenery;
   private trails?: ReturnType<typeof createKeplerTrails>;
+  private turbine?: ReturnType<typeof spectralTurbine>;
+  private reflections?: ReturnType<typeof spectralReflections>;
   private previewCenter = new THREE.Vector3();
   private cameraRight = new THREE.Vector3();
   private cameraUp = new THREE.Vector3();
@@ -248,6 +268,9 @@ export class RaceBroadcast {
     this.sun.position.set(-18, 38, -22);
     this.fitShadows(track.id === 'crux' ? 175 : 40);
     if (this.scene.background instanceof THREE.Texture) this.scene.background.dispose();
+    this.scene.environmentIntensity = track.id === 'spectral' ? .35 : .55;
+    this.sun.color.set(track.id === 'spectral' ? '#e7efff' : '#ffecd1');
+    this.sun.intensity = track.id === 'spectral' ? 1.55 : 2.3;
     this.scene.background = new THREE.Color(theme.sky);
     this.scene.fog = new THREE.FogExp2(theme.fog, theme.haze);
     const redraw = () => {
@@ -262,14 +285,18 @@ export class RaceBroadcast {
     this.scenery = createCourseScenery(track, redraw);
     if (track.id === 'kepler') this.scenery.add(keplerStars(this.renderer.getPixelRatio()));
     this.trails = track.id === 'kepler' ? createKeplerTrails(this.scenery, track) : undefined;
+    this.turbine = track.id === 'spectral' ? spectralTurbine(track) : undefined;
+    this.reflections = track.id === 'spectral' ? spectralReflections(this.scenery, track) : undefined;
     this.scene.add(this.scenery);
     this.gate = new THREE.Group();
-    const stopShape = new THREE.BoxGeometry(0.13, 0.42, track.laneWidth * 0.65);
-    const stopFinish = new THREE.MeshStandardMaterial({ color: '#d79c32', roughness: 0.35, metalness: 0.42 });
+    const shaft = track.id === 'spectral';
+    const stopShape = shaft ? new THREE.BoxGeometry(.92, .13, track.laneWidth * .79)
+      : new THREE.BoxGeometry(0.13, 0.42, track.laneWidth * 0.65);
+    const stopFinish = new THREE.MeshStandardMaterial({ color: shaft ? '#354661' : '#d79c32', roughness: 0.35, metalness: 0.42 });
     for (let lane = 0; lane < track.laneCount; lane++) {
       const at = track.sample(track.startS + track.radius + 0.08, (lane - (track.laneCount - 1) / 2) * track.laneWidth);
       const stop = new THREE.Mesh(stopShape, stopFinish);
-      stop.position.set(at.x, at.y + 0.17, at.z);
+      stop.position.set(at.x + (shaft ? .37 : 0), at.y + (shaft ? .005 : .17), at.z);
       stop.rotation.y = -Math.atan2(at.tz, at.tx);
       stop.castShadow = true;
       this.gate.add(stop);
@@ -301,6 +328,9 @@ export class RaceBroadcast {
     bounds.getCenter(this.previewCenter);
     this.previewCenter.y *= 0.78;
     this.preview();
+    // The first cut out of the shaft reveals glass and coils outside the grid camera.
+    // Submit their shaders while the course is on the setup screen.
+    if (track.id === 'spectral') this.renderer.compile(this.scenery, this.camera, this.scene);
   }
 
   resize() {
@@ -336,6 +366,15 @@ export class RaceBroadcast {
     }
     this.gateRaised = false;
     this.marker.visible = false;
+    if (this.track.id === 'spectral') {
+      const lip = this.track.sample(this.track.startS);
+      this.focusGoal.set(lip.x + 4.4, lip.y - 15.4, lip.z);
+      this.positionGoal.copy(this.focusGoal).add(
+        new THREE.Vector3(49, 23, 43).multiplyScalar(Math.max(1, 1.1 / this.camera.aspect)));
+      if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = .0016;
+      this.snap();
+      return;
+    }
     this.focusGoal.copy(this.previewCenter);
     const direction = new THREE.Vector3(...settings[this.track.id].preview).normalize();
     // Fit the actual curved raceway, allowing the studio floor to extend beyond the frame.
@@ -368,19 +407,24 @@ export class RaceBroadcast {
 
   entrants(racers: Racer[]) {
     this.trails?.reset(racers.map(racer => racer.color));
+    this.reflections?.entrants(racers);
     for (const mesh of this.balls) {
       this.scene.remove(mesh);
       mesh.material.map?.dispose(); mesh.material.dispose();
     }
     this.favorite = racers.findIndex(r => r.marked);
     this.balls = racers.map((racer, index) => {
+      const spectral = this.track.id === 'spectral';
+      const paint = spectral ? spectralPaint(racer) : marblePaint(racer);
       const group = new THREE.Mesh(this.ballShape,
-        new THREE.MeshPhysicalMaterial({ map: marblePaint(racer), roughness: 0.205, metalness: 0.14, clearcoat: 1, clearcoatRoughness: 0.09 }));
+        new THREE.MeshPhysicalMaterial({ map: paint, emissiveMap: spectral ? paint : null,
+          emissive: spectral ? '#ffffff' : '#000000', emissiveIntensity: .37, roughness: 0.205, metalness: 0.14, clearcoat: 1, clearcoatRoughness: 0.09 }));
       group.castShadow = true;
       group.scale.setScalar(this.track.radius);
       const slot = Math.floor((this.track.laneCount - racers.length) / 2) + index;
       const p = this.track.sample(this.track.startS, (slot - (this.track.laneCount - 1) / 2) * this.track.laneWidth);
-      group.position.set(p.x, p.y + this.track.radius, p.z);
+      const normal = spectral ? spectralOffset(this.track.startS) : { x: 0, y: 1 };
+      group.position.set(p.x + normal.x * this.track.radius, p.y + normal.y * this.track.radius, p.z);
       group.rotation.set(0.35, index * 0.6, 0.16);
       this.scene.add(group);
       return group;
@@ -392,12 +436,18 @@ export class RaceBroadcast {
       this.fitShadows(38);
       if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = settings.crux.haze;
     }
+    if (this.track.id === 'spectral' && this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = settings.spectral.haze;
     this.mode = 'grid'; this.shot = -1; this.previousCut = -10; this.featureShot = '';
     this.gateRaised = false;
     const p = this.track.sample(this.track.startS);
     this.focusGoal.set(p.x + 0.4 * p.tx, p.y + 0.45, p.z + 0.4 * p.tz);
     const k = Math.max(1, 1.4 / this.camera.aspect);
     this.positionGoal.copy(this.focusGoal).add(new THREE.Vector3(7.2 * p.tx - 8 * p.rx, 5.4, 7.2 * p.tz - 8 * p.rz).multiplyScalar(k));
+    if (this.track.id === 'spectral') {
+      // Looking over the edge during the countdown reveals the vertical light lanes and the scoop below.
+      this.focusGoal.set(p.x + .78, p.y - .70, p.z);
+      this.positionGoal.copy(this.focusGoal).add(new THREE.Vector3(6.1, 12.8, .69).multiplyScalar(k));
+    }
     this.snap();
   }
 
@@ -410,6 +460,7 @@ export class RaceBroadcast {
     this.scenery?.updateStations?.(gates, displayTime);
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
+      this.displayDistances[marble.id] = THREE.MathUtils.lerp(marble.previousDistance, marble.distance, alpha);
       if (marble.cutAt !== undefined) {
         const gate = gates?.find(g => g.number === marble.cutAt);
         mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime, marbles, alpha);
@@ -420,6 +471,7 @@ export class RaceBroadcast {
         .lerp(marble.position, alpha);
       mesh.quaternion.copy(marble.previousRotation).slerp(this.q.copy(marble.rotation), alpha);
     }
+    this.reflections?.update(marbles, this.balls, this.displayDistances);
     this.marker.visible = this.favorite >= 0 && !marbles[this.favorite]?.cutAt && (this.mode === 'race' || this.mode === 'grid');
     if (this.balls[this.favorite]) {
       this.marker.position.copy(this.balls[this.favorite].position);
@@ -434,15 +486,17 @@ export class RaceBroadcast {
       this.focusGoal.set(end.x, end.y + 0.35, end.z);
       this.positionGoal.copy(this.focusGoal).add(new THREE.Vector3(5.8, 5.2, 8).multiplyScalar(Math.max(1, 1.05 / this.camera.aspect)));
     }
-    this.gate.position.y = THREE.MathUtils.damp(this.gate.position.y, this.gateRaised ? -0.55 : 0, 12, dt);
+    if (this.track.id === 'spectral') {
+      this.gate.position.x = THREE.MathUtils.damp(this.gate.position.x, this.gateRaised ? -1.04 : 0, 24, dt);
+    } else this.gate.position.y = THREE.MathUtils.damp(this.gate.position.y, this.gateRaised ? -0.55 : 0, 12, dt);
     const smooth = 1 - Math.exp(-dt * 5);
     this.eyes.lerp(this.positionGoal, smooth); this.focus.lerp(this.focusGoal, smooth);
     this.camera.position.copy(this.eyes); this.camera.lookAt(this.focus);
     if (this.track.id === 'crux' && this.mode === 'preview') {
       this.sun.target.position.copy(this.previewCenter);
       this.sun.position.set(-18, 38, -22).multiplyScalar(5).add(this.previewCenter);
-    } else if (this.track.id === 'kepler' || this.track.id === 'crux') {
-      // Both long courses span more than the studio shadow camera. Keep contact shadows on the racing pack.
+    } else if (this.track.id === 'kepler' || this.track.id === 'crux' || this.track.id === 'spectral') {
+      // These long courses span more than the studio shadow camera. Keep contact shadows on the racing pack.
       this.sun.target.position.copy(this.focus);
       this.sun.position.set(this.focus.x - 18, this.focus.y + 38, this.focus.z - 22);
     }
@@ -451,12 +505,14 @@ export class RaceBroadcast {
   }
 
   private racingShot(marbles: MarbleState[], elapsed: number, gates?: readonly RaceCheckpoint[]) {
-    const running = marbles.filter(marble => marble.finishTime === null && marble.cutAt === undefined).sort((a, b) => b.distance - a.distance);
+    const distances = this.displayDistances;
+    const running = marbles.filter(marble => marble.finishTime === null && marble.cutAt === undefined).sort((a, b) => distances[b.id] - distances[a.id]);
     if (!running.length) return;
-    const lead = running[0].distance;
-    const pack = running.filter(m => lead - m.distance < 9);
-    const center = (lead + pack[pack.length - 1].distance) / 2;
-    const spread = lead - pack[pack.length - 1].distance;
+    const lead = distances[running[0].id];
+    const pack = running.filter(m => lead - distances[m.id] < 9);
+    const tail = distances[pack[pack.length - 1].id];
+    const center = (lead + tail) / 2;
+    const spread = lead - tail;
     const p = this.track.sample(center + 0.75);
     const coverage = shots[this.track.id];
     const id = this.track.sections.findIndex((section, i) => lead < section.end + (coverage[i].holdPastEnd ?? 0));
@@ -467,6 +523,8 @@ export class RaceBroadcast {
     if (next !== old && (elapsed - this.previousCut > 2.4 || finish)) {
       this.shot = next; this.previousCut = elapsed;
     }
+    const opening = this.track.id === 'spectral' && (this.shot === 0 || this.shot === 1);
+    this.previousFocusGoal.copy(this.focusGoal);
     this.focusGoal.set(p.x, p.y + 0.42, p.z);
     let offset: Offset;
     let feature = '';
@@ -476,7 +534,26 @@ export class RaceBroadcast {
       || (g.releasedAt !== null && elapsed - g.releasedAt < 1.1)));
     const jump = this.track.id === 'crux' && cruxJumps.find(j => lead >= j.rampStart - 2 && lead <= j.catchEnd);
     const board = this.track.id === 'crux' && cruxObstacleBoards.find(b => lead >= b.start - 2 && center <= b.end + 1.3);
-    if (station) {
+    const split = this.track.id === 'spectral' && gates?.find(g => lead >= g.s - 9 && lead <= g.s + 4.8);
+    const carousel = this.turbine && this.track.sections[2];
+    const arc = carousel ? (lead - carousel.start) / (carousel.end - carousel.start) : 0;
+    if (this.turbine && arc >= .32 && arc <= .66) {
+      // A short establishing shot keeps the turbine and the racers in the same frame.
+      feature = 'carousel';
+      this.focusGoal.lerp(this.turbine.hub, .39);
+      offset = [-3 * p.tx - 15 * p.rx, 26, -3 * p.tz - 15 * p.rz];
+      featureFrame = [...pack.map(m => this.balls[m.id].position),
+        new THREE.Vector3(this.turbine.hub.x + .55 * this.turbine.fanRadius * p.rx,
+          this.turbine.hub.y, this.turbine.hub.z + .55 * this.turbine.fanRadius * p.rz)];
+    } else if (split) {
+      feature = split.name;
+      const line = split.line, sign = this.track.sample(split.s, -this.track.halfWidth - .64);
+      const dial = new THREE.Vector3(sign.x, sign.y + 3.4, sign.z);
+      this.focusGoal.lerp(dial, .24);
+      offset = [-7.8 * line.tx + 7.2 * line.rx, 5.9, -7.8 * line.tz + 7.2 * line.rz];
+      featureFrame = [...pack.map(m => this.balls[m.id].position),
+        dial.clone().addScaledVector(this.camera.up, 1.6), dial.clone().addScaledVector(this.camera.up, -1.6)];
+    } else if (station) {
       feature = 'gate-' + station.number;
       // Stay on the actual timing stripe through the last entrance, including a close finish.
       const lastEntry = station.arrivals[station.field - 1];
@@ -528,7 +605,8 @@ export class RaceBroadcast {
       const line = this.track.sample(this.track.finishS - 0.35);
       const lock = THREE.MathUtils.smoothstep(center, this.track.finishS - 7.5, this.track.finishS - 1.8);
       this.focusGoal.lerp(this.relative.set(line.x, line.y + 0.4, line.z), lock);
-      offset = [1.8 * line.tx, 5.5, 10.4];
+      offset = this.track.id === 'spectral' ? [-3.1 * line.tx + 8.8 * line.rx, 5.6, -3.1 * line.tz + 8.8 * line.rz]
+        : [1.8 * line.tx, 5.5, 10.4];
     } else {
       const shot = shots[this.track.id][Math.max(0, this.shot)];
       if (shot.fixed) this.focusGoal.copy(this.sectionAnchors[this.shot]);
@@ -537,8 +615,14 @@ export class RaceBroadcast {
       if (shot.trackRelative) {
         // Frame the pack in the local coordinates of the bend.
         this.focusGoal.set(0, 0, 0);
-        for (const marble of pack) this.focusGoal.add(marble.position);
-        this.focusGoal.divideScalar(pack.length);
+        let totalWeight = 0;
+        for (const marble of pack) {
+          // A racer leaving the trailing edge of the fast launch pack gradually loses camera weight.
+          const weight = opening ? 1 - THREE.MathUtils.smoothstep(lead - distances[marble.id], 6, 9) : 1;
+          this.focusGoal.addScaledVector(this.balls[marble.id].position, weight);
+          totalWeight += weight;
+        }
+        this.focusGoal.divideScalar(totalWeight);
         const [forward, up, side] = offset;
         offset = [forward * p.tx + side * p.rx, up, forward * p.tz + side * p.rz];
       }
@@ -554,7 +638,7 @@ export class RaceBroadcast {
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
     let distance = baseDistance;
     // A fixed camera frames its entire section. Tracking cameras fit the lead pack.
-    const subjects = fixed ? fixedFrame : pack.map(marble => marble.position);
+    const subjects = fixed ? fixedFrame : pack.map(marble => this.balls[marble.id].position);
     for (const subject of subjects) {
       this.relative.copy(subject).sub(this.focusGoal);
       const width = (Math.abs(this.relative.dot(this.cameraRight)) + this.track.radius * 1.6) / this.camera.aspect;
@@ -563,6 +647,13 @@ export class RaceBroadcast {
     }
     this.positionGoal.copy(this.focusGoal).addScaledVector(this.sightLine, distance);
     if ((old !== this.shot && old >= 0) || feature !== this.featureShot) this.snap();
+    else if (opening && old === this.shot && !feature) {
+      // Ride the pack through the shaft and scoop. Damping then affects the changing
+      // viewing angle and zoom without putting the camera several diameters behind the fall.
+      const travel = this.relative.subVectors(this.focusGoal, this.previousFocusGoal);
+      this.eyes.add(travel);
+      this.focus.add(travel);
+    }
     this.featureShot = feature;
   }
 }

@@ -44,6 +44,7 @@ const scores = [
   ['tideglass', 104, 'Tideglass Conservatory, a seaside glasshouse with winding aquamarine flumes and lush foliage. A breezy instrumental bossa nova in G major. A syncopated nylon-string guitar and round fretless bass carry the rhythm, a breathy alto flute plays a rising then falling phrase, soft brushed rim and shaker tucked underneath. Keep the swaying groove intimate and buoyant.'],
   ['kepler', 110, 'Kepler Relay, an original orbital relay race score titled Signal Return. Cinematic analog space electronica in D Dorian, 4/4. Start in motion with a rounded pulsing synth bass, a warm stereo sequencer answering itself across the beat, and a little muted electronic kick. A solitary, lyrical portamento lead climbs a fourth and hangs in the air over broad, slowly opening string-synth chords. Develop the signal motif over four eight-bar phrases: a spare transmission, a busier descending sequence, an airy suspended phrase, then a low, driving reprise. Keep the pulse and harmonic turnaround continuous under the race. Warm, spacious, quietly propulsive.', 32],
   ['crux', cruxScore.bpm, cruxScore.brief, cruxScore.bars],
+  ['spectral', 124, 'An original instrumental called Chromatic Slipstream for Spectral Relay, a marble race inside a dark neon velodrome. Electro breaks in F minor, 4/4. The hook is a four-note descending glassy FM pluck, passed left to right over a syncopated sub bass and tight, dry drum-machine breaks. Shape four sixteen-bar sections: start with the plunging pluck and bass in unison, bring in a clipped chord answer from the opposite side, stretch that answer into luminous harmonies above half-time drums, then return to the full-speed opening groove with the hook in octaves. Keep bass centered, the backbeat soft, and the mix lean enough to hear the marbles.', 64],
 ];
 // Compare short windows of the original recording to find a matching pair of bar lines.
 // Moving the exit a little allows for an imperfect generated tempo.
@@ -128,7 +129,9 @@ for (const [id, bpm, brief, loopBars = 8] of scores) {
     '[tail]atrim=start=' + end + ':end=' + (end + overlap) + ',asetpts=PTS-STARTPTS[tailtrim];' +
     '[head]atrim=start=' + start + ':end=' + (start + overlap) + ',asetpts=PTS-STARTPTS[headtrim];' +
     '[tailtrim][headtrim]acrossfade=d=' + overlap + '[seam];' +
-    '[bodytrim][seam]concat=n=2:v=0:a=1[out]';
+    // A tiny taper also covers the MP3 encoder's first and last samples.
+    '[bodytrim][seam]concat=n=2:v=0:a=1,afade=t=in:d=0.003,' +
+    'afade=t=out:st=' + (end - start - 0.003) + ':d=0.003[out]';
   const work = await mkdtemp(new URL('master-', cache));
   try {
     const loop = join(work, 'loop.wav');

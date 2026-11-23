@@ -7,6 +7,7 @@ import { tsImport } from 'tsx/esm/api';
 import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
 import keplerLayout from '../src/courses/kepler-layout.json' with { type: 'json' };
 import cruxLayout from '../src/courses/crux-layout.json' with { type: 'json' };
+import spectralLayout from '../src/courses/spectral-layout.json' with { type: 'json' };
 import { cruxScore } from './crux-score.mjs';
 
 const url = process.env.MARBLE_URL;
@@ -86,6 +87,12 @@ function clock(seconds) {
   return Math.floor(hundredths / 6000) + ':' + remainder.toFixed(2).padStart(5, '0');
 }
 
+function clockSeconds(time) {
+  assert.match(time, /^\d+:\d{2}\.\d{2}$/);
+  const [minutes, seconds] = time.split(':').map(Number);
+  return minutes * 60 + seconds;
+}
+
 // Rehearse the featured grids so screenshots follow course landmarks after tuning.
 async function landmarkTimes(id, seed, sections) {
   const { buildTrack } = await tsImport('../src/track.ts', import.meta.url);
@@ -103,10 +110,14 @@ async function landmarkTimes(id, seed, sections) {
     const { takeoff, landing } = jump;
     marks.push(['Airborne', (takeoff + landing) / 2]);
   }
-  marks.sort((a, b) => a[1] - b[1]);
   const heat = new RaceSimulation(track, 6, seed, id === 'crux' ? 'knockout' : 'endurance');
   const times = {};
   try {
+    if (id === 'spectral') {
+      marks.push(['Freefall', spectralLayout.launch.drop / 2]);
+      for (const gate of heat.competition.gates) marks.push([gate.name, gate.s + 1]);
+    }
+    marks.sort((a, b) => a[1] - b[1]);
     heat.release();
     for (const [name, distance] of marks) {
       while (!heat.failure && !heat.finished && heat.marbles.every(marble => marble.distance < distance)) {
@@ -152,7 +163,8 @@ async function assertSetup(size) {
 }
 
 async function verifyResults(track, count, marked) {
-  await page.waitForSelector('body[data-view="results"], body[data-view="failure"]', { timeout: track === 'Crux Mountain Masters' ? 300000 : 150000, state: 'attached' });
+  const longHeat = track === 'Crux Mountain Masters' || track === 'Spectral Relay';
+  await page.waitForSelector('body[data-view="results"], body[data-view="failure"]', { timeout: longHeat ? 300000 : 150000, state: 'attached' });
   const failure = await page.locator('.failure-message').allTextContents();
   if (failure.length) assert.fail(track + ' heat failed at seed ' + await page.evaluate(() => window.playtestGridSeed) + ': ' + failure.join(' '));
   assert.equal(await page.locator('.result-course').innerText(), track);
@@ -161,6 +173,7 @@ async function verifyResults(track, count, marked) {
   }
   await assertRacers('.finish-order', entrants.slice(0, count));
   await assertMarked('.finish-order', marked);
+  if (track === 'Spectral Relay') await verifySpectralSplits(count);
   const rows = await page.locator('.finish-order li').evaluateAll(items => items.map(item => ({
     name: item.querySelector('.finish-name span:nth-child(2)').firstChild.textContent,
     points: Number(item.querySelector('strong').textContent),
@@ -174,6 +187,44 @@ async function verifyResults(track, count, marked) {
     expectedScores.set(result.name, score);
   });
   console.log('Verified', track, 'with', count, 'classified racers');
+}
+
+async function verifySpectralSplits(count) {
+  assert.ok(clockSeconds(await page.locator('.winner-card p').innerText()) >= 120, 'The first finisher must race for at least two minutes.');
+  const finishes = await page.locator('.finish-order li').evaluateAll(rows => rows.map(row => [
+    row.querySelector('.finish-name span:nth-child(2)').firstChild.textContent,
+    row.querySelector('.finish-time').firstChild.textContent,
+  ]));
+  const finishByName = new Map(finishes.map(([name, time]) => [name, clockSeconds(time)]));
+  const lastSplit = new Map();
+  await page.getByText('Checkpoint splits', { exact: true }).click();
+  const gates = page.locator('.split-detail');
+  assert.equal(await gates.count(), 5);
+  for (let gate = 0; gate < 5; gate++) {
+    const details = gates.nth(gate);
+    const summary = details.locator('summary');
+    await summary.click();
+    const rows = details.locator('li:visible');
+    assert.equal(await rows.count(), count);
+    const splits = await rows.evaluateAll(items => items.map(item => ({
+      name: item.querySelector('span').textContent,
+      color: item.querySelector('.identity-dot').style.getPropertyValue('--livery').trim(),
+      time: item.querySelector('time').textContent,
+    })));
+    assert.equal(await summary.innerText(), 'CP ' + (gate + 1) + ' · ' + splits[0].name + ' · ' + splits[0].time);
+    const seconds = splits.map(split => clockSeconds(split.time));
+    assert.deepEqual(seconds, [...seconds].sort((a, b) => a - b));
+    assert.deepEqual(splits.map(split => split.name).sort(), entrants.slice(0, count).map(entrant => entrant.name).sort());
+    for (const { name, time, color } of splits) {
+      assert.equal(color, entrants.find(entrant => entrant.name === name).color);
+      const crossing = clockSeconds(time);
+      assert.ok((lastSplit.get(name) ?? 0) < crossing && crossing < finishByName.get(name), name + ' split at CP ' + (gate + 1));
+      lastSplit.set(name, crossing);
+    }
+    if (gate === 0) await capture('spectral-splits');
+    await summary.click();
+  }
+  await page.getByText('Checkpoint splits', { exact: true }).click();
 }
 
 async function assertMarked(list, slot) {
@@ -378,14 +429,15 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23 };
+  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23, spectral: 23 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
   const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
   const crux = await landmarkTimes('crux', seeds.crux, ['Chalk Velodrome']);
+  const spectral = await landmarkTimes('spectral', seeds.spectral, ['Halo Carousel', 'Induction Gallery', 'Polarity Inverter']);
   const jumpShots = {};
   for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne], ['crux', crux.Airborne]]) {
-    jumpShots[id] = { approach: clock(time - 1), target: clock(time - .04) };
+    jumpShots[id] = clock(time - .04);
   }
   for (const [title, id, shots] of [
     ['Timber Corkscrew', 'timber', [['0:13.00', 'racing']]],
@@ -393,7 +445,7 @@ try {
     ['Midnight Orrery', 'orrery', [
       [clock(orrery['Escapement Gallery']), 'escapement'],
       [clock(orrery['Ecliptic Underpass']), 'underpass'],
-      [jumpShots.orrery.target, 'comet-skips'],
+      [jumpShots.orrery, 'comet-skips'],
     ]],
     ['Tideglass Conservatory', 'tideglass', [
       [clock(tideglass['Standing Wave Gallery']), 'standing-wave'],
@@ -402,16 +454,17 @@ try {
     ['Kepler Relay', 'kepler', [
       [clock(kepler['Solar Array Esses']), 'arrays'],
       [clock(kepler['Gravity Dive']), 'gravity-dive'],
-      [jumpShots.kepler.target, 'vacuum-transfer'],
+      [jumpShots.kepler, 'vacuum-transfer'],
       [clock(kepler['Aurora Catch']), 'aurora-catch'],
       [clock(kepler['Orbital Return']), 'orbital-return'],
     ]],
     ['Crux Mountain Masters', 'crux', [
-      [jumpShots.crux.target, 'headwall-gap'],
+      [jumpShots.crux, 'headwall-gap'],
       [clock(crux['Chalk Velodrome']), 'chalk-velodrome'],
       [clock(crux.Rack), 'qualification-rack'],
       [clock(crux.Release), 'gate-release'],
     ]],
+    ['Spectral Relay', 'spectral', Object.entries(spectral).map(([name, time]) => [clock(time), name.toLowerCase().replaceAll(' ', '-')])],
   ]) {
     await trackButton(title).click();
     if (id === 'crux') {
@@ -428,6 +481,7 @@ try {
     if (id !== 'wireworks') await page.reload();
     await page.waitForFunction(() => document.querySelector('.start-button')?.disabled === false);
     assert.equal(await trackButton(title).getAttribute('aria-pressed'), 'true');
+    if (id === 'spectral') assert.equal(await page.getByRole('button', { name: 'Knockout', exact: true }).count(), 0);
     await assertSetup(6);
     await page.evaluate(() => window.scrollTo(0, 0));
     await capture(id + '-setup');
@@ -438,11 +492,24 @@ try {
         window.playtestNextSeed = seed;
       }, seeds[id]);
     }
+    if (id === 'spectral') {
+      await page.evaluate(() => { window.playtestActionShot = { approach: '0:00.00', target: '0:00.00' }; });
+    }
     await startButton.click();
+    if (id === 'spectral') {
+      await page.waitForSelector('body[data-view="countdown"]', { state: 'attached' });
+      await capture('spectral-grid');
+      if (mobile) {
+        await page.setViewportSize({ width: portrait.height, height: portrait.width });
+        await capture('spectral-grid-landscape');
+        await page.setViewportSize(portrait);
+      }
+      await page.evaluate(() => { delete window.playtestActionShot; });
+    }
     for (const [time, shot] of shots) {
-      const freeze = time === jumpShots[id]?.target || shot === 'qualification-rack' || shot === 'gate-release';
+      const freeze = id === 'spectral' || time === jumpShots[id] || shot === 'qualification-rack' || shot === 'gate-release';
       if (freeze) {
-        const approach = time === jumpShots[id]?.target ? jumpShots[id].approach : clock((shot === 'qualification-rack' ? crux.Rack : crux.Release) - 1);
+        const approach = clock(Math.max(0, clockSeconds(time) - 1));
         await page.evaluate(spec => { window.playtestActionShot = spec; }, { approach, target: time });
       }
       await page.waitForFunction(target => document.querySelector('.race-clock')?.textContent >= target, time, { timeout: 90000 });
@@ -453,6 +520,23 @@ try {
         await assertFullscreen(false);
       }
       await capture(id + '-' + shot);
+      if (id === 'spectral') {
+        assert.deepEqual(await page.locator('.checkpoint-steps span:visible').allTextContents(), ['1', '2', '3', '4', '5']);
+        assert.equal(await page.locator('.running-order .cut-row').count(), 0);
+        if (shot === 'freefall') assert.equal(await page.locator('.checkpoint-status').innerText(), 'Checkpoint 1 of 5 ahead');
+        if (shot.startsWith('cp-')) {
+          const number = Number(shot.slice(3));
+          assert.equal(await page.locator('.checkpoint-steps .cleared').count(), number);
+          const message = await page.locator('.checkpoint-status').innerText();
+          const [gate, leader, split] = message.split(' · ');
+          assert.equal(gate, 'CP ' + number);
+          assert.ok(entrants.some(entrant => entrant.name === leader));
+          assert.match(split, /^\d+:\d{2}\.\d{2}$/);
+          if (mobile && number === 1) await assertCompactOrder(6);
+        }
+        await assertRacers('.running-order', entrants);
+        await assertMarked('.running-order', 5);
+      }
       if (freeze) await page.evaluate(() => { delete window.playtestActionShot; });
       if (id === 'crux') assert.ok(await page.locator('.checkpoint-status').isVisible());
       if (shot === 'gate-release') assert.match(await page.locator('.checkpoint-status').innerText(), /5 released/);
@@ -460,7 +544,7 @@ try {
     await assertRacers('.running-order', entrants);
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
     const musicSeconds = await page.evaluate(() => window.playtestMusicSeconds);
-    assert.ok(musicSeconds > 10, title + ' must play a decoded music loop.');
+    assert.ok(musicSeconds > (id === 'spectral' ? 120 : 10), title + ' must play its decoded music loop.');
     if (id === 'crux') {
       const scoreSeconds = cruxScore.bars * 4 * 60 / cruxScore.bpm;
       assert.ok(Math.abs(musicSeconds - scoreSeconds) < .25, 'Crux must play the full house arrangement.');
@@ -489,8 +573,8 @@ try {
       await page.getByRole('button', { name: 'Change setup' }).click();
     }
   }
-  assert.equal(await tally(), 16);
-  assert.deepEqual([...loadedMusic].sort(), ['crux', 'frostline', 'kepler', 'orrery', 'prism', 'tideglass', 'timber', 'wireworks']);
+  assert.equal(await tally(), 18);
+  assert.deepEqual([...loadedMusic].sort(), ['crux', 'frostline', 'kepler', 'orrery', 'prism', 'spectral', 'tideglass', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -505,7 +589,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed eight courses, eight soundtracks, named entrants, restart, sixteen timed heats and cumulative podium scoring:', game);
+  console.log('Passed nine courses, nine soundtracks, named entrants, restart, eighteen timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

@@ -49,6 +49,8 @@ export interface Layout {
 }
 interface SurfaceSpan { start: number; end: number; surface: CourseSurface }
 export interface Profile {
+  /** A preceding, separately sampled surface joins this deck at zero. */
+  openStart?: boolean
   layered?: boolean
   /** Mold the lane guides into the running surface instead of adding upright fins. */
   roundedLaneDepth?: number
@@ -191,7 +193,7 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
       if (reverse) indices.push(first, first + 1, first + 2, first + 1, first + 3, first + 2)
       else indices.push(first, first + 2, first + 1, first + 1, first + 2, first + 3)
     }
-    if (start === 0) bumper(start, true)
+    if (start === 0 && !profile.openStart) bumper(start, true)
     if (end === length) bumper(end, false)
     return { vertices: new Float32Array(vertices), indices: new Uint32Array(indices), surface }
   })

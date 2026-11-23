@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import type { CourseTrack, TrackSample } from './track'
 import type { MarbleState } from './simulation'
-import type { RaceCheckpoint } from './cruxCompetition'
+import type { RaceCheckpoint } from './checkpointRace'
 import { roundedLaneBands } from './courseGeometry'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
 import { createFrostlineScenery } from './frostlineScenery'
@@ -12,13 +12,14 @@ import { createOrreryScenery } from './orreryScenery'
 import { createCruxScenery } from './cruxScenery'
 import { createTideglassScenery } from './tideglassScenery'
 import { createKeplerScenery } from './keplerScenery'
+import { createSpectralScenery } from './spectralScenery'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
 const scenery = {
   prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery,
   wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery,
-  kepler: createKeplerScenery, crux: createCruxScenery,
+  kepler: createKeplerScenery, crux: createCruxScenery, spectral: createSpectralScenery,
 }
 
 export type CourseScenery = THREE.Group & {

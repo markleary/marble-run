@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { cruxCheckpoints, cruxFunnelRails, cruxFunnelTubes, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
 import { createCruxRejectChute } from './cruxRejectChute'
 import type { MarbleState } from './simulation'
-import type { RaceCheckpoint } from './cruxCompetition'
+import type { RaceCheckpoint } from './checkpointRace'
 import type { CourseTrack } from './track'
 import { SceneryBatch, canvasTexture, lifted, material } from './sceneryKit'
 

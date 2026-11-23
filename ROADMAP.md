@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All eight courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All nine courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -12,6 +12,7 @@ All eight courses support two to six named racers and use fixed, pre-generated l
 | Tideglass Conservatory | Playable | Coastal botanical glasshouse | Standing-wave half-pipe and twin molded sluices | 54–68 seconds |
 | Kepler Relay | Playable | Orbital communications station | Gravity dive and ballistic transfer from alloy to aurora glass | At least 60 seconds to first place |
 | Crux Mountain Masters | Playable | Indoor climbing competition | Four jumps, four obstacle boards, a double-apex return and knockout gates | At least two minutes to the first finish |
+| Spectral Relay | Playable | Neon induction arena | Vertical drop shaft, two magnetic galleries and five flying splits | At least two minutes to the first finish |
 
 ## Prism Speedway
 
@@ -80,6 +81,16 @@ Six lanes drop from Belay Gate onto a charcoal grip board with a brass dome and 
 **Cameras and acceptance.** Frame the four obstacle boards and their passing lines in both orientations. Show takeoff and touchdown across each gap. At an active station, hold on the entry stripe through the final crossing, then show the seated qualifiers, the pocket and their joint restart. Run 100 seeds per field size and format. In each Knockout, compare the cut against independently measured nose crossings at the visible entrance and check a last-pair overtake inside the funnel. Verify physical passage through the throat, assigned pad positions and simultaneous releases. Every winner must take at least 120 seconds. Check for contact with all four boards, clean landings and successful restarts from each section.
 
 All 500 Endurance and 500 Knockout heats finished on seeds 1–100. Endurance winners crossed in 140.77–151.31 seconds and six-marble Knockout winners in 160.42–169.33 seconds. Every grid slot won at every field size in both formats. All 1,000 cuts matched the observed entry order, including 38 instances in which a different marble reached the fork last. All 4,000 crossings at active gates passed inside the physical throat. In 20 six-marble heats per format, the median free-racing speed was 8.18 units per second in Knockout and 9.38 in Endurance. Those heats averaged 14.7 and 8.8 marble-to-marble impacts, counting impulses of at least 0.45 separated by more than 0.12 seconds for the same pair.
+
+## Spectral Relay
+
+Six marbles stage side by side on the face of the Drop Shaft. At release they fall straight down between white lane lights. A curved receiver turns the fall into a sprint toward the first timing beam. The field sweeps three quarters of a turn around the Halo Carousel turbine, crosses the Induction Gallery and winds onto the Chromatic Viaduct. Beyond Flywheel Bend, the Polarity Inverter alternates the pull over shorter stretches of track. The light on each coil follows the same traveling magnetic field that pulls the marbles across the deck. The Diffraction Esses lead into the final checkpoint and timing stripe. The ElevenLabs instrumental “Chromatic Slipstream” pairs a descending glass-synth hook with syncopated bass and electronic drums.
+
+**Checkpoints.** Each of the five beams records the leading edge of every marble to a fraction of a physics tick. The HUD lights the numbered sector when the first racer crosses and shows their name and time. All entrants continue racing through the gates. Open **Checkpoint splits** in the results to see who led each sector, then expand a gate for the complete passing order and elapsed times.
+
+**Cameras and acceptance.** Track the center of the falling pack through the scoop and onto Afterimage Straight. Show the bank around the turbine and the movement of the field beside the active coils. Keep the timing beam and its numbered dial readable at crossings in landscape and portrait. Run 100 seeded heats at each field size. Every winner must take at least 120 seconds from release, and every entrant must register once at each gate, in sequence, before finishing. Test a six-marble drop for straight vertical travel, smooth motion on contact with the scoop and speed out of the receiver. Restart the field from rest at each downstream section.
+
+All 500 seeded heats finished. Winners crossed in 122.52–148.51 seconds and the last marble crossed in 133.89–189.91 seconds. All six grid slots produced winners at every field size. The five beams recorded 10,000 splits across 2,000 marble runs. In isolation, a resting marble in each magnetic gallery accelerated toward the illuminated pole.
 
 ## Adding courses to the game
 
