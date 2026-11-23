@@ -1,7 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 import type { CourseTrack } from './courseGeometry'
 import { cruxFunnelTubes, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
-import type { RaceCheckpoint } from './cruxCompetition'
+import type { RaceCheckpoint } from './checkpointRace'
 import type { MarbleState } from './simulation'
 
 /** The funnel remains static. Its downstream belt steers dynamic marbles against

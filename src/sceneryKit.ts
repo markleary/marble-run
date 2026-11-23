@@ -90,11 +90,19 @@ function signTexture(label: string, mode: 'start' | 'finish' | 'course', colors:
 /** Static geometry is merged by finish, so all support hardware shares a few draws. */
 export class SceneryBatch {
   private readonly buckets = new Map<Material, THREE.BufferGeometry[]>()
+  constructor(private readonly rowSpacing = .32, private readonly options: {
+    indexed?: boolean
+    /** End of an exact straight extrusion with a constant cross-section. */
+    straightUntil?: number
+  } = {}) {}
   add(mat: Material, geo: THREE.BufferGeometry, matrix?: THREE.Matrix4) {
     if (matrix) geo.applyMatrix4(matrix)
     if (!geo.getAttribute('normal')) geo.computeVertexNormals()
-    const normalized = geo.index ? geo.toNonIndexed() : geo
+    const normalized = geo.index && !this.options.indexed ? geo.toNonIndexed() : geo
     if (normalized !== geo) geo.dispose()
+    if (this.options.indexed && !normalized.index) {
+      normalized.setIndex(Array.from({ length: normalized.getAttribute('position').count }, (_, i) => i))
+    }
     let bucket = this.buckets.get(mat)
     if (!bucket) this.buckets.set(mat, bucket = [])
     bucket.push(normalized)
@@ -112,10 +120,15 @@ export class SceneryBatch {
   }
   surface(mat: Material, start: number, end: number, get: (s: number, t: number) => Point, width: number, bands = 1) {
     const vertices: number[] = [], uvs: number[] = [], indices: number[] = []
-    const rows = Math.max(1, Math.ceil((end - start) / .32))
+    const rows = Math.max(1, Math.ceil((end - start) / this.rowSpacing))
     const columns = bands + 1
-    for (let i = 0; i <= rows; i++) {
-      const s = start + (end - start) * i / rows
+    // Keep two regular intervals at each end of the straight. All intermediate
+    // cross-sections have identical profiles and linearly mapped texture coordinates.
+    const straightEnd = Math.min(this.options.straightUntil ?? start, end)
+    const skippedRows = straightEnd > start ? Math.max(0, Math.floor(rows * (straightEnd - start) / (end - start)) - 5) : 0
+    for (let i = 0; i <= rows - skippedRows; i++) {
+      const sourceRow = i > 2 ? i + skippedRows : i
+      const s = start + (end - start) * sourceRow / rows
       for (let j = 0; j <= bands; j++) {
         const t = j / bands
         const p = get(s, t)
@@ -130,6 +143,16 @@ export class SceneryBatch {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
     geometry.setIndex(indices)
+    if (skippedRows) {
+      // Three averages normals by triangle area. Keep the two ends of the long
+      // quad shaded like the adjacent regular row of this same extrusion.
+      geometry.computeVertexNormals()
+      const normals = geometry.getAttribute('normal') as THREE.BufferAttribute
+      for (let j = 0; j < columns; j++) {
+        normals.copyAt(2 * columns + j, normals, columns + j)
+        normals.copyAt(3 * columns + j, normals, columns + j)
+      }
+    }
     this.add(mat, geometry)
   }
   strip(mat: Material, start: number, end: number, get: (s: number, side: 0 | 1) => Point, width: number) {

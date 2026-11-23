@@ -1,16 +1,18 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { CourseTrack, CourseSurface } from './track';
+import { spectralFields, spectralOffset, spectralPolarity } from './courses/spectral';
 import { attachOrreryDrive } from './orreryDrive';
 import { attachCruxRacks } from './cruxRackDrive';
-import type { CruxFormat } from './courses/cruxCheckpoints';
-import { createCruxCompetition } from './cruxCompetition';
+import { cruxCheckpoints, type CruxFormat } from './courses/cruxCheckpoints';
+import { spectralCheckpoints } from './courses/spectralCheckpoints';
+import { createCheckpointRace } from './checkpointRace';
 import { crossingTime } from './raceTiming';
 
 export const FIXED_DT = 1 / 60;
 const GRAVITY = 5.4;
 const STALL_SECONDS = 10;
 const MAX_HEAT_SECONDS = 120;
-const CRUX_MAX_HEAT_SECONDS = 240;
+const LONG_HEAT_SECONDS = 240;
 
 let initialization: Promise<void> | undefined;
 export function initPhysics(): Promise<void> {
@@ -29,6 +31,7 @@ export interface MarbleState {
   rotation: Orientation;
   previousRotation: Orientation;
   distance: number;
+  previousDistance: number;
   progress: number;
   speed: number;
   finishTime: number | null;
@@ -78,10 +81,11 @@ export class RaceSimulation {
   private readonly impacts: Impact[] = [];
   private readonly advanceDrive?: (seconds: number) => void;
   private readonly driveRacks?: ReturnType<typeof attachCruxRacks>;
-  readonly competition?: ReturnType<typeof createCruxCompetition>;
+  readonly competition?: ReturnType<typeof createCheckpointRace>;
   private tick = 0;
   private racing = false;
   private disposed = false;
+  private fastOpening = false;
 
   constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number, format: CruxFormat = 'endurance') {
     if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > track.laneCount) {
@@ -112,7 +116,14 @@ export class RaceSimulation {
     }
     if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
     this.finishLine = track.sample(track.finishS);
-    if (track.id === 'crux') this.competition = createCruxCompetition(track, entrantCount, format);
+    if (track.id === 'crux') this.competition = createCheckpointRace(track, entrantCount, cruxCheckpoints(track.sections), format);
+    if (track.id === 'spectral') {
+      this.competition = createCheckpointRace(track, entrantCount, spectralCheckpoints(track.sections));
+      this.fastOpening = track.startS < track.sections[1].end;
+      // Resume travel after an impact with the curved receiver within the same
+      // fixed tick. A single CCD substep discards the remaining motion at contact.
+      if (this.fastOpening) this.world.maxCcdSubsteps = 4;
+    }
     const random = seededRandom(seed);
     const slots = startingSlots(track.laneCount, random);
     this.marbles = Array.from({ length: entrantCount }, (_, id) => {
@@ -121,7 +132,9 @@ export class RaceSimulation {
       const laneCenter = (slot + 0.5) * track.laneWidth - track.halfWidth;
       const lateral = laneCenter + (2 * random() - 1) * wiggleRoom;
       const floor = track.sample(track.startS, lateral);
-      const position = { x: floor.x, y: floor.y + track.radius + 0.01, z: floor.z };
+      const normal = track.id === 'spectral' ? spectralOffset(track.startS) : { x: 0, y: 1 };
+      const clearance = track.radius + .01;
+      const position = { x: floor.x + normal.x * clearance, y: floor.y + normal.y * clearance, z: floor.z };
       const yaw = random() * Math.PI;
       const rotation = { x: 0, y: Math.sin(yaw), z: 0, w: Math.cos(yaw) };
       const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic()
@@ -137,7 +150,7 @@ export class RaceSimulation {
       this.idByCollider.set(collider.handle, id);
       return {
         id, slot, position, previousPosition: position, rotation, previousRotation: rotation,
-        distance: track.startS, progress: 0, speed: 0, finishTime: null,
+        distance: track.startS, previousDistance: track.startS, progress: 0, speed: 0, finishTime: null,
       };
     });
     if (this.competition?.gates.some(gate => gate.cut)) {
@@ -175,9 +188,14 @@ export class RaceSimulation {
     this.impacts.length = 0;
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
     this.advanceDrive?.((this.tick + 1) * FIXED_DT);
+    if (this.track.id === 'spectral') this.pulseFields();
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
+    if (this.fastOpening && this.marbles.every(marble => marble.distance >= this.track.sections[1].end)) {
+      this.fastOpening = false;
+      this.world.maxCcdSubsteps = 1;
+    }
     this.competition?.step(this.marbles, this.elapsed, FIXED_DT, this.withdraw);
     this.driveRacks?.(this.marbles, this.elapsed, FIXED_DT);
     this.events.drainContactForceEvents(event => {
@@ -190,6 +208,16 @@ export class RaceSimulation {
     });
     this.finished = this.marbles.every(marble => marble.finishTime !== null || marble.cutAt !== undefined);
     return this.impacts;
+  }
+
+  private pulseFields() {
+    for (const marble of this.marbles) {
+      const field = spectralFields.find(f => marble.distance >= f.start && marble.distance <= f.end);
+      if (!field) continue;
+      const { rx, rz } = this.track.sample(marble.distance);
+      const impulse = 4.2 * spectralPolarity(field, marble.distance, this.elapsed) * FIXED_DT;
+      this.bodies[marble.id].applyImpulse({ x: rx * impulse, y: 0, z: rz * impulse }, true);
+    }
   }
 
   /** Continue into the catch tray while the results camera settles. Timing is already locked. */
@@ -205,6 +233,7 @@ export class RaceSimulation {
       const body = this.bodies[marble.id];
       marble.previousPosition = marble.position;
       marble.previousRotation = marble.rotation;
+      marble.previousDistance = marble.distance;
       marble.position = body.translation();
       marble.rotation = body.rotation();
       const velocity = body.linvel();
@@ -212,7 +241,7 @@ export class RaceSimulation {
       if (!this.finished && marble.finishTime === null) this.updateProgress(marble);
       // The receiving bed damps both translation and roll after the entire
       // sphere has cleared the timing stripe. The result is already locked.
-      if (this.track.id === 'crux' && marble.finishTime !== null && body.linearDamping() < 2.4) {
+      if ((this.track.id === 'crux' || this.track.id === 'spectral') && marble.finishTime !== null && body.linearDamping() < 2.4) {
         const line = this.finishLine;
         const depth = (marble.position.x - line.x) * line.tx + (marble.position.z - line.z) * line.tz - 1.1;
         if (depth > 0) {
@@ -261,7 +290,7 @@ export class RaceSimulation {
     if (Math.abs(nearest.lateral) > track.halfWidth + track.radius * 2
         || p.y < track.sample(nearest.s, nearest.lateral).y - 2 * track.radius) {
       this.failure = 'A marble left the course.';
-    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > (track.id === 'crux' ? CRUX_MAX_HEAT_SECONDS : MAX_HEAT_SECONDS)) {
+    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > (track.id === 'crux' || track.id === 'spectral' ? LONG_HEAT_SECONDS : MAX_HEAT_SECONDS)) {
       this.failure = 'A marble stopped before the finish.';
     }
   }

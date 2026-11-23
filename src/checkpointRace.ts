@@ -1,5 +1,5 @@
 import type { CourseTrack, TrackSample } from './courseGeometry'
-import { cruxCheckpoints, type CruxFormat } from './courses/cruxCheckpoints'
+import type { CruxFormat } from './courses/cruxCheckpoints'
 import { crossingTime } from './raceTiming'
 import type { MarbleState } from './simulation'
 
@@ -21,9 +21,10 @@ export interface RaceCheckpoint {
   releasedAt: number | null
 }
 
-export function createCruxCompetition(track: CourseTrack, count: number, format: CruxFormat) {
+export function createCheckpointRace(track: CourseTrack, count: number,
+  lines: readonly Pick<RaceCheckpoint, 'number' | 'name' | 's' | 'entryS'>[], format: CruxFormat = 'endurance') {
   let field = count
-  const timingLines = cruxCheckpoints(track.sections).filter(gate => gate.entryS > track.startS)
+  const timingLines = lines.filter(gate => gate.entryS > track.startS)
   const gates: RaceCheckpoint[] = timingLines.map(({ number, name, s, entryS }, index): RaceCheckpoint => {
     // Put the cuts at the later gates in a smaller field. The last two always race to the stripe.
     const cut = format === 'knockout' && field > 2 && timingLines.length - index <= field - 2

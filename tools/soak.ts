@@ -9,6 +9,7 @@ import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkCruxKnockouts } from './check-crux';
 import { cruxJumps } from '../src/courses/crux';
+import { checkSpectralMechanics } from './check-spectral';
 import { orreryJumps } from '../src/courses/orreryJumps';
 import { checkOrreryCrossing } from './check-orrery';
 import { checkCourseJumps } from './check-jumps';
@@ -109,16 +110,24 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
           winnerSeconds.push(winnerTime);
           transferSeconds.push(...transfer.seconds(seed));
-        } else if (track.id === 'crux') {
-          for (const gate of race.competition!.gates) {
+        } else if (track.id === 'crux' || track.id === 'spectral') {
+          const gates = race.competition!.gates;
+          assert.equal(gates.length, track.id === 'crux' ? 4 : 5);
+          const previousSplit = Array<number>(count).fill(0);
+          for (const gate of gates) {
             assert.equal(gate.arrivals.length, count);
             assert.equal(new Set(gate.arrivals.map(a => a.id)).size, count);
+            let previousArrival = 0;
+            for (const { id, time } of gate.arrivals) {
+              assert.ok(time >= previousArrival && time > previousSplit[id] && time < race.marbles[id].finishTime!);
+              previousArrival = previousSplit[id] = time;
+            }
             assert.ok(!gate.cut);
             assert.equal(gate.phase, 'bypass');
             assert.equal(gate.releasedAt, null);
           }
           const winningTime = finishers[0].finishTime!;
-          assert.ok(winningTime >= 120, 'Crux winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
+          assert.ok(winningTime >= 120, track.id + ' winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
           winnerSeconds.push(winningTime);
         }
         wins[finishers[0].slot]++;
@@ -219,7 +228,8 @@ for (const id of courseIds) {
     checkCruxKnockouts(track, firstSeed, repetitions);
     checkCourseJumps(track, firstSeed, cruxJumps);
   }
-  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux'].includes(id)) checkSectionStarts(track);
+  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral'].includes(id)) checkSectionStarts(track);
+  if (id === 'spectral') checkSpectralMechanics(track, firstSeed);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
   if (id === 'orrery') {
