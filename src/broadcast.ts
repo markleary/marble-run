@@ -9,6 +9,7 @@ import type { RaceCheckpoint } from './checkpointRace';
 import { cruxJumps } from './courses/crux';
 import { cruxObstacleBoards, type CruxBoardId } from './courses/cruxObstacles';
 import { cruxRack } from './courses/cruxCheckpoints';
+import { afterglowCue } from './courses/afterglow';
 import { createCourseScenery, type CourseScenery } from './scenery';
 import keplerNebula from './assets/kepler-nebula.jpg';
 import { createKeplerTrails } from './keplerTrails';
@@ -101,6 +102,16 @@ const shots: Record<CourseId, Shot[]> = {
     { offset: [-7.8, 8.5, 4.8], portraitOffset: [-8.4, 7.1, 3.2], trackRelative: true },
     { offset: [-5.4, 7.0, 6.8], trackRelative: true },
   ],
+  afterglow: [
+    { offset: [7.1, 4.4, 4.8], trackRelative: true },
+    { offset: [-3.0, 6.8, 7.8], portraitOffset: [-6.4, 5.9, 4.8], trackRelative: true },
+    { offset: [-4.3, 7.4, 5.3], portraitOffset: [-6, 7.5, 3.9], trackRelative: true },
+    // Stay low and near the axis beneath the upper raceway at both crossings.
+    { offset: [-7.5, 3.1, 0], portraitOffset: [6.4, 1.65, -.3], trackRelative: true },
+    { offset: [-4.8, 8.5, -5.5], portraitOffset: [-6.1, 7.4, -3.5], trackRelative: true },
+    { offset: [6.2, 4.5, -2.8], portraitOffset: [5.9, 3.6, -1.65], trackRelative: true },
+    { offset: [-4.3, 5.5, -5.1], portraitOffset: [-6.2, 3.3, -.1], trackRelative: true },
+  ],
 };
 
 const settings: Record<CourseId, { sky: string; fog: string; haze: number; preview: Offset; finishApproach?: number }> = {
@@ -113,6 +124,7 @@ const settings: Record<CourseId, { sky: string; fog: string; haze: number; previ
   tideglass: { sky: '#cbe1d3', fog: '#d1e2d8', haze: 0.0042, preview: [0.48, 1.28, 1.45] },
   spectral: { sky: '#090f21', fog: '#141c37', haze: .0034, preview: [.82, 1.16, 1.28] },
   kepler: { sky: '#070b18', fog: '#18203c', haze: 0.0014, preview: [-0.53, 0.85, 1.38] },
+  afterglow: { sky: '#111030', fog: '#211832', haze: .0019, preview: [-.58, .72, 1.24], finishApproach: 5 },
 };
 
 function disposeScenery(root: THREE.Group) {
@@ -208,6 +220,7 @@ export class RaceBroadcast {
   private shot = -1;
   private previousCut = -10;
   private featureShot = '';
+  private faderCue = 0;
   private sectionAnchors: THREE.Vector3[] = [];
   private fixedFrames: THREE.Vector3[][] = [];
   private viewSize = new THREE.Vector2();
@@ -359,6 +372,7 @@ export class RaceBroadcast {
 
   preview() {
     this.mode = 'preview';
+    this.faderCue = 0;
     if (this.track.id === 'crux') {
       this.fitShadows(175);
       // The overview camera sits hundreds of units outside the cutaway hall.
@@ -415,10 +429,12 @@ export class RaceBroadcast {
     this.favorite = racers.findIndex(r => r.marked);
     this.balls = racers.map((racer, index) => {
       const spectral = this.track.id === 'spectral';
+      const afterglow = this.track.id === 'afterglow';
       const paint = spectral ? spectralPaint(racer) : marblePaint(racer);
       const group = new THREE.Mesh(this.ballShape,
-        new THREE.MeshPhysicalMaterial({ map: paint, emissiveMap: spectral ? paint : null,
-          emissive: spectral ? '#ffffff' : '#000000', emissiveIntensity: .37, roughness: 0.205, metalness: 0.14, clearcoat: 1, clearcoatRoughness: 0.09 }));
+        new THREE.MeshPhysicalMaterial({ map: paint, emissiveMap: spectral || afterglow ? paint : null,
+          emissive: spectral || afterglow ? '#ffffff' : '#000000', emissiveIntensity: afterglow ? .27 : .37,
+          roughness: 0.205, metalness: 0.14, clearcoat: 1, clearcoatRoughness: 0.09 }));
       group.castShadow = true;
       group.scale.setScalar(this.track.radius);
       const slot = Math.floor((this.track.laneCount - racers.length) / 2) + index;
@@ -451,12 +467,13 @@ export class RaceBroadcast {
     this.snap();
   }
 
+  setHeatSeed(seed: number) { this.faderCue = afterglowCue(seed); }
   race() { this.mode = 'race'; this.gateRaised = true; }
   podium() { this.mode = 'podium'; }
 
   update(marbles: MarbleState[], alpha: number, dt: number, elapsed: number, gates?: readonly RaceCheckpoint[]) {
     const displayTime = this.mode === 'race' ? Math.max(0, elapsed - (1 - alpha) * FIXED_DT) : elapsed;
-    this.scenery?.setRaceTime?.(displayTime);
+    this.scenery?.setRaceTime?.(displayTime + (this.track.id === 'afterglow' ? this.faderCue : 0));
     this.scenery?.updateStations?.(gates, displayTime);
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
@@ -495,8 +512,8 @@ export class RaceBroadcast {
     if (this.track.id === 'crux' && this.mode === 'preview') {
       this.sun.target.position.copy(this.previewCenter);
       this.sun.position.set(-18, 38, -22).multiplyScalar(5).add(this.previewCenter);
-    } else if (this.track.id === 'kepler' || this.track.id === 'crux' || this.track.id === 'spectral') {
-      // These long courses span more than the studio shadow camera. Keep contact shadows on the racing pack.
+    } else if (this.track.id === 'kepler' || this.track.id === 'crux' || this.track.id === 'spectral' || this.track.id === 'afterglow') {
+      // Long courses span more than the studio shadow camera. Keep contact shadows on the racing pack.
       this.sun.target.position.copy(this.focus);
       this.sun.position.set(this.focus.x - 18, this.focus.y + 38, this.focus.z - 22);
     }

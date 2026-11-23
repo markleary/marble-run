@@ -83,6 +83,7 @@ legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 [data-course=kepler] .track-stripes { background: linear-gradient(90deg,#5765aa 0 33%,#eea25d 33% 66%,#55dcd8 66%); }
 [data-course=crux] .track-stripes { background: linear-gradient(90deg,#40444a 0 33%,#e9b82a 33% 66%,#d65039 66%); }
 [data-course=spectral] .track-stripes { background: linear-gradient(90deg,#41d3e8 0 33%,#5147ae 33% 66%,#ed5c9c 66%); }
+[data-course=afterglow] .track-stripes { background: linear-gradient(90deg,#ff398e 0 28%,#28183b 28% 36%,#9b5dff 36% 64%,#28183b 64% 72%,#12d9d8 72%); }
 .format-choices { display: flex; gap: 6px; margin-top: 10px; }
 .format-choices button { flex: 1; padding: 8px; border: 1px solid #c6cbbd; border-radius: 4px; background: #fffdf6; font-weight: 600; }
 .format-choices button[aria-pressed=true] { background: var(--ink); color: var(--paper); border-color: var(--ink); }

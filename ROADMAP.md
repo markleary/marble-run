@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All nine courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All ten courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -13,6 +13,7 @@ All nine courses support two to six named racers and use fixed, pre-generated la
 | Kepler Relay | Playable | Orbital communications station | Gravity dive and ballistic transfer from alloy to aurora glass | At least 60 seconds to first place |
 | Crux Mountain Masters | Playable | Indoor climbing competition | Four jumps, four obstacle boards, a double-apex return and knockout gates | At least two minutes to the first finish |
 | Spectral Relay | Playable | Neon induction arena | Vertical drop shaft, two magnetic galleries and five flying splits | At least two minutes to the first finish |
+| Afterglow FM | Playable | Midnight radio arena | Sliding crossfader pucks and a rainbow bridge that narrows beneath the upper deck | 60–90 seconds |
 
 ## Prism Speedway
 
@@ -91,6 +92,14 @@ Six marbles stage side by side on the face of the Drop Shaft. At release they fa
 **Cameras and acceptance.** Track the center of the falling pack through the scoop and onto Afterimage Straight. Show the bank around the turbine and the movement of the field beside the active coils. Keep the timing beam and its numbered dial readable at crossings in landscape and portrait. Run 100 seeded heats at each field size. Every winner must take at least 120 seconds from release, and every entrant must register once at each gate, in sequence, before finishing. Test a six-marble drop for straight vertical travel, smooth motion on contact with the scoop and speed out of the receiver. Restart the field from rest at each downstream section.
 
 All 500 seeded heats finished. Winners crossed in 122.52–148.51 seconds and the last marble crossed in 133.89–189.91 seconds. All six grid slots produced winners at every field size. The five beams recorded 10,000 splits across 2,000 marble runs. In isolation, a resting marble in each magnetic gallery accelerated toward the illuminated pole.
+
+## Afterglow FM
+
+Six launch lanes feed Crossfader Alley, where three motorized pucks slide across the racing line at different rates. Each heat’s seed sets their starting positions, so a rematch changes the gaps the pack encounters. Carrier Spiral banks through 270° before the rainbow bands squeeze from 8.4 units wide to 3.11 on Mono Bridge, beneath the upper deck. The road opens up at Sideband Turn, then folds through Stereo Return on the way to the stripe. Every entrant races continuously from release to finish. The ElevenLabs instrumental “Dial Tone at Midnight” pairs a two-note FM synth call with a syncopated octave bass in a 65.62-second loop.
+
+**Cameras and acceptance.** The opening shot looks back at the starting field. Crossfader Alley frames the pack alongside the sliding pucks, then the camera follows the banking through Carrier Spiral. At Mono Bridge, a landscape camera follows from upstream and a portrait camera looks back from downstream to keep the upper deck clear of the leader. Across 100 seeds at each field size, the first marble must take at least 60 seconds and the final marble must finish within 90 seconds. Verify that all six starting slots can win, that rerunning the same grid reproduces its finish times, and that every racer receives a finish time.
+
+All 1,000 heats on seeds 1–100 and 1009–1108 finished. Winners crossed in 60.79–81.10 seconds and the final marble crossed in 62.92–86.87 seconds. Each starting slot won at every field size. A six-marble pack could start from rest at every downstream section, and each moving puck displaced a marble in a direct contact test.
 
 ## Adding courses to the game
 

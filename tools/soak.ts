@@ -7,6 +7,7 @@ import wireworksLayout from '../src/courses/wireworks-layout.json';
 import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
+import { checkAfterglow } from './check-afterglow';
 import { checkCruxKnockouts } from './check-crux';
 import { cruxJumps } from '../src/courses/crux';
 import { checkSpectralMechanics } from './check-spectral';
@@ -110,6 +111,11 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
           winnerSeconds.push(winnerTime);
           transferSeconds.push(...transfer.seconds(seed));
+        } else if (track.id === 'afterglow') {
+          assert.equal(race.competition, undefined);
+          const winner = finishers[0].finishTime!, last = finishers[count - 1].finishTime!;
+          assert.ok(winner >= 60 && last <= 90, `Afterglow, seed ${seed}, field ${count}: finish times ${winner}–${last} fell outside 60–90 seconds.`);
+          winnerSeconds.push(winner);
         } else if (track.id === 'crux' || track.id === 'spectral') {
           const gates = race.competition!.gates;
           assert.equal(gates.length, track.id === 'crux' ? 4 : 5);
@@ -223,12 +229,13 @@ for (const id of courseIds) {
   const track = buildTrack(id);
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
+  if (id === 'afterglow') checkAfterglow(track);
   if (id === 'kepler') checkKeplerReceiver(track);
   if (id === 'crux') {
     checkCruxKnockouts(track, firstSeed, repetitions);
     checkCourseJumps(track, firstSeed, cruxJumps);
   }
-  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral'].includes(id)) checkSectionStarts(track);
+  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral', 'afterglow'].includes(id)) checkSectionStarts(track);
   if (id === 'spectral') checkSpectralMechanics(track, firstSeed);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);

@@ -1,0 +1,121 @@
+{
+  "seed": 1179466039,
+  "origin": {
+    "x": -28,
+    "z": -14,
+    "angle": 0
+  },
+  "laneCount": 6,
+  "halfWidth": 4.2,
+  "startS": 1.1,
+  "finishS": 342.2212253330794,
+  "sections": [
+    {
+      "name": "Dial-In Grid",
+      "start": 0,
+      "end": 19
+    },
+    {
+      "name": "Crossfader Alley",
+      "start": 19,
+      "end": 55
+    },
+    {
+      "name": "Carrier Spiral",
+      "start": 55,
+      "end": 120.03096792930872
+    },
+    {
+      "name": "Mono Bridge",
+      "start": 120.03096792930872,
+      "end": 163.0309679293087
+    },
+    {
+      "name": "Sideband Turn",
+      "start": 163.0309679293087,
+      "end": 204.81415022205294
+    },
+    {
+      "name": "Stereo Return",
+      "start": 204.81415022205294,
+      "end": 305.2212253330794
+    },
+    {
+      "name": "Sign-Off Sprint",
+      "start": 305.2212253330794,
+      "end": 348.2212253330794
+    }
+  ],
+  "runs": [
+    {
+      "length": 19,
+      "curvature": 0
+    },
+    {
+      "length": 36,
+      "curvature": 0
+    },
+    {
+      "length": 65.03096792930872,
+      "curvature": 0.07246376811594203
+    },
+    {
+      "length": 43,
+      "curvature": 0
+    },
+    {
+      "length": 41.78318229274425,
+      "curvature": -0.07518796992481203
+    },
+    {
+      "length": 47,
+      "curvature": 0
+    },
+    {
+      "length": 53.40707511102648,
+      "curvature": -0.058823529411764705
+    },
+    {
+      "length": 43,
+      "curvature": 0
+    }
+  ],
+  "faders": [
+    {
+      "s": 25,
+      "radius": 0.55,
+      "height": 0.76,
+      "center": -0.5,
+      "travel": 1.48,
+      "period": 4.2,
+      "phase": 1.0191164514794129
+    },
+    {
+      "s": 35,
+      "radius": 0.55,
+      "height": 0.76,
+      "center": 0.55,
+      "travel": 1.48,
+      "period": 5.6,
+      "phase": 5.642239936409342
+    },
+    {
+      "s": 45,
+      "radius": 0.55,
+      "height": 0.76,
+      "center": -0.45,
+      "travel": 1.48,
+      "period": 4.8,
+      "phase": 4.188765957406867
+    }
+  ],
+  "bridgeScale": 0.37,
+  "launchTrims": [
+    -0.12,
+    0.12,
+    0.36,
+    0.38,
+    0.19,
+    -0.2
+  ]
+}

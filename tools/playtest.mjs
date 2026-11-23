@@ -171,6 +171,13 @@ async function verifyResults(track, count, marked) {
   if (track === 'Kepler Relay') {
     assert.ok(await page.locator('.winner-card p').innerText() >= '1:00.00', 'Kepler Relay winner must race for at least a minute.');
   }
+  if (track === 'Afterglow FM') {
+    const times = await page.locator('.finish-time').evaluateAll(cells => cells.map(cell => cell.firstChild.textContent));
+    assert.equal(times.length, count);
+    assert.ok(times.map(clockSeconds).every(seconds => seconds >= 60 && seconds <= 90),
+      'Every Afterglow FM racer must cross the finish in 60–90 seconds.');
+    assert.equal(await page.locator('.checkpoint-results').count(), 0);
+  }
   await assertRacers('.finish-order', entrants.slice(0, count));
   await assertMarked('.finish-order', marked);
   if (track === 'Spectral Relay') await verifySpectralSplits(count);
@@ -429,12 +436,13 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23, spectral: 23 };
+  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23, spectral: 23, afterglow: 23 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
   const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
   const crux = await landmarkTimes('crux', seeds.crux, ['Chalk Velodrome']);
   const spectral = await landmarkTimes('spectral', seeds.spectral, ['Halo Carousel', 'Induction Gallery', 'Polarity Inverter']);
+  const afterglow = await landmarkTimes('afterglow', seeds.afterglow, ['Crossfader Alley', 'Carrier Spiral', 'Mono Bridge', 'Sideband Turn']);
   const jumpShots = {};
   for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne], ['crux', crux.Airborne]]) {
     jumpShots[id] = clock(time - .04);
@@ -465,6 +473,13 @@ try {
       [clock(crux.Release), 'gate-release'],
     ]],
     ['Spectral Relay', 'spectral', Object.entries(spectral).map(([name, time]) => [clock(time), name.toLowerCase().replaceAll(' ', '-')])],
+    ['Afterglow FM', 'afterglow', [
+      ['0:03.00', 'launch'],
+      [clock(afterglow['Crossfader Alley']), 'crossfaders'],
+      [clock(afterglow['Carrier Spiral']), 'spiral'],
+      [clock(afterglow['Mono Bridge']), 'mono-bridge'],
+      [clock(afterglow['Sideband Turn']), 'sideband'],
+    ]],
   ]) {
     await trackButton(title).click();
     if (id === 'crux') {
@@ -539,6 +554,10 @@ try {
       }
       if (freeze) await page.evaluate(() => { delete window.playtestActionShot; });
       if (id === 'crux') assert.ok(await page.locator('.checkpoint-status').isVisible());
+      if (id === 'afterglow') {
+        assert.equal(await page.locator('.checkpoint-status').isVisible(), false);
+        assert.equal(await page.locator('.checkpoint-steps').isVisible(), false);
+      }
       if (shot === 'gate-release') assert.match(await page.locator('.checkpoint-status').innerText(), /5 released/);
     }
     await assertRacers('.running-order', entrants);
@@ -573,8 +592,8 @@ try {
       await page.getByRole('button', { name: 'Change setup' }).click();
     }
   }
-  assert.equal(await tally(), 18);
-  assert.deepEqual([...loadedMusic].sort(), ['crux', 'frostline', 'kepler', 'orrery', 'prism', 'spectral', 'tideglass', 'timber', 'wireworks']);
+  assert.equal(await tally(), 20);
+  assert.deepEqual([...loadedMusic].sort(), ['afterglow', 'crux', 'frostline', 'kepler', 'orrery', 'prism', 'spectral', 'tideglass', 'timber', 'wireworks']);
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -589,7 +608,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed nine courses, nine soundtracks, named entrants, restart, eighteen timed heats and cumulative podium scoring:', game);
+  console.log('Passed ten courses, ten soundtracks, named entrants, restart, twenty timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

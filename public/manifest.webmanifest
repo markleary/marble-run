@@ -1,7 +1,7 @@
 {
   "name": "Marble Run",
   "short_name": "Marble Run",
-  "description": "Race two to six named marbles across nine three-dimensional tracks.",
+  "description": "Race two to six named marbles across ten three-dimensional tracks.",
   "lang": "en",
   "start_url": "./",
   "scope": "./",
