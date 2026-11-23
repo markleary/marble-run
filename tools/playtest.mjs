@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, devices, webkit } from 'playwright';
 import { preview } from 'vite';
@@ -7,6 +7,7 @@ import { tsImport } from 'tsx/esm/api';
 import orreryLayout from '../src/courses/orrery-layout.json' with { type: 'json' };
 import keplerLayout from '../src/courses/kepler-layout.json' with { type: 'json' };
 import cruxLayout from '../src/courses/crux-layout.json' with { type: 'json' };
+import { cruxScore } from './crux-score.mjs';
 
 const url = process.env.MARBLE_URL;
 const base = '/marble-run/';
@@ -27,11 +28,15 @@ const page = await browser.newPage(mobile ? {
 } : { viewport: { width: 1440, height: 900 } });
 const issues = [];
 const loadedMusic = new Set();
+let cruxMusicBytes;
 page.on('pageerror', error => issues.push(error.message));
 page.on('response', response => {
   if (response.status() >= 400) issues.push(response.status() + ' ' + response.url());
   const music = new URL(response.url()).pathname.match(/\/audio\/music-([a-z]+)\.mp3$/);
-  if (music && response.ok()) loadedMusic.add(music[1]);
+  if (music && response.ok()) {
+    loadedMusic.add(music[1]);
+    if (music[1] === 'crux') cruxMusicBytes = response.body().catch(() => null);
+  }
 });
 const fieldSize = mobile ? 2 : 6;
 const frostField = mobile ? 5 : 6;
@@ -456,7 +461,12 @@ try {
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
     const musicSeconds = await page.evaluate(() => window.playtestMusicSeconds);
     assert.ok(musicSeconds > 10, title + ' must play a decoded music loop.');
-    if (id === 'crux') assert.ok(Math.abs(musicSeconds - 178.29) < .1, 'Crux must play “Five Holds Left”.');
+    if (id === 'crux') {
+      const scoreSeconds = cruxScore.bars * 4 * 60 / cruxScore.bpm;
+      assert.ok(Math.abs(musicSeconds - scoreSeconds) < .25, 'Crux must play the full house arrangement.');
+      const master = await readFile(new URL('../public/audio/music-crux.mp3', import.meta.url));
+      assert.ok(master.equals((await cruxMusicBytes) ?? Buffer.alloc(0)), 'Crux must load the released recording of ' + cruxScore.title);
+    }
     await verifyResults(title, 6, 5);
     if (id === 'crux') {
       assert.deepEqual(await page.locator('.finish-time').allTextContents().then(times => times.slice(2)),

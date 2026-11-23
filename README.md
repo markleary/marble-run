@@ -19,7 +19,7 @@ To play from your home screen, choose **Install game** in race setup. On iPhone 
 | Midnight Orrery | Three swinging pendulums, an orbital underpass and two ramp jumps across open gaps | Celesta, bass clarinet and viola in a clockwork ostinato |
 | Tideglass Conservatory | A botanical glasshouse with a winding half-pipe and twin sea-glass sluices | Alto flute and nylon-string guitar in a bossa nova |
 | Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
-| Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, bumper and blade slaloms, a double-apex turnaround and knockout gates | “Five Holds Left,” a 140 BPM breakbeat with picked bass and twin electric guitars |
+| Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, bumper and blade slaloms, a double-apex turnaround and knockout gates | “Contour Line,” melodic electronic house with a rolling bass line and a rising synth hook |
 
 Each track has its own instrumental loop. The music sits underneath the rolling marbles, starting gate and finish bell. The speaker button mutes or restores the full mix.
 
@@ -38,4 +38,6 @@ npm run dev
 
 `npm run build` type-checks the project and produces the GitHub Pages site. `npm run test:physics` exercises all five field sizes on every course headlessly in Rapier, including both Crux formats. See [AGENTS.md](AGENTS.md) for browser tests and local audio generation, and [ROADMAP.md](ROADMAP.md) for course designs and release criteria.
 
-Built with Three.js, Rapier, TypeScript and Vite. The game bundles its locally composed Crux score and its ElevenLabs music and effects. Sound begins with player interaction.
+Built with Three.js, Rapier, TypeScript and Vite. The game bundles its ElevenLabs instrumental scores and sound effects. Sound begins with player interaction.
+
+`npm run audio:generate -- --crux` remasters the cached recording of “Contour Line”. With an empty source cache, it uses the ElevenLabs key in `.env` to generate a new rendition.

@@ -2,10 +2,10 @@ import { access, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cruxScoreTitle, renderCruxScore } from './crux-score.mjs';
+import { cruxScore } from './crux-score.mjs';
 
 const directory = new URL('../public/audio/', import.meta.url);
-// Re-render the local composition when iterating on its arrangement.
+// Remaster just the Crux recording from the local source cache.
 const cruxOnly = process.argv.includes('--crux');
 function elevenLabsKey() {
   if (!process.env.ELEVENLABS_API_KEY) throw new Error('Set ELEVENLABS_API_KEY in the local .env file.');
@@ -43,10 +43,11 @@ const scores = [
   ['orrery', 112, 'Midnight Orrery, a miniature brass clockwork observatory tracing the orbits of planets. A nocturnal chamber ostinato in E minor, gentle celesta notes turning against pulsing bass clarinet, with clipped viola harmonics and a muted French horn answer. Interlock two quiet three-note patterns across a steady four-beat measure to suggest meshing gears. Curious, precise, forward-moving.'],
   ['tideglass', 104, 'Tideglass Conservatory, a seaside glasshouse with winding aquamarine flumes and lush foliage. A breezy instrumental bossa nova in G major. A syncopated nylon-string guitar and round fretless bass carry the rhythm, a breathy alto flute plays a rising then falling phrase, soft brushed rim and shaker tucked underneath. Keep the swaying groove intimate and buoyant.'],
   ['kepler', 110, 'Kepler Relay, an original orbital relay race score titled Signal Return. Cinematic analog space electronica in D Dorian, 4/4. Start in motion with a rounded pulsing synth bass, a warm stereo sequencer answering itself across the beat, and a little muted electronic kick. A solitary, lyrical portamento lead climbs a fourth and hangs in the air over broad, slowly opening string-synth chords. Develop the signal motif over four eight-bar phrases: a spare transmission, a busier descending sequence, an airy suspended phrase, then a low, driving reprise. Keep the pulse and harmonic turnaround continuous under the race. Warm, spacious, quietly propulsive.', 32],
+  ['crux', cruxScore.bpm, cruxScore.brief, cruxScore.bars],
 ];
 // Compare short windows of the original recording to find a matching pair of bar lines.
 // Moving the exit a little allows for an imperfect generated tempo.
-function chooseLoop(source, bpm, loopBars) {
+function chooseLoop(source, bpm, loopBars, lockedTempo = false) {
   const rate = 4000, frame = 80;
   const pcm = execFileSync('ffmpeg', ['-v', 'error', '-i', source, '-f', 'f32le', '-ar', String(rate), '-ac', '1', '-'], { maxBuffer: 4000000 });
   const samples = new Float32Array(pcm.buffer, pcm.byteOffset, pcm.length / 4);
@@ -67,7 +68,9 @@ function chooseLoop(source, bpm, loopBars) {
   const bars = loopBars * 4 * 60 / bpm * hz;
   const context = Math.round(hz * 1.2);
   let best = Infinity, bestStart = 0, bestEnd = 0;
-  for (let length = Math.round(bars * .87); length <= bars * 1.13; length++) {
+  // Keep the house kick on the same beat of its 92-bar phrase across the seam.
+  const drift = lockedTempo ? hz * (60 / bpm) / 3 : bars * .13;
+  for (let length = Math.round(bars - drift); length <= bars + drift; length++) {
     for (let a = Math.round(hz * .7); a + length + context < envelopes.length - hz * .55; a += 2) {
       let mismatch = 0;
       for (let k = 0; k < context; k += 2) {
@@ -92,17 +95,18 @@ function masterLoop(id, inputArgs, output, title) {
     ...(title ? ['-metadata', 'title=' + title, '-metadata', 'album=Marble Run'] : []), output]);
 }
 
-for (const [id, bpm, brief, loopBars = 8] of cruxOnly ? [] : scores) {
+for (const [id, bpm, brief, loopBars = 8] of scores) {
+  if (cruxOnly && id !== 'crux') continue;
   const output = new URL('music-' + id + '.mp3', directory);
-  if (await access(output).then(() => true, () => false)) continue;
-  const source = new URL(id + '-source.mp3', cache);
+  if (!cruxOnly && await access(output).then(() => true, () => false)) continue;
+  const source = new URL((id === 'crux' ? 'crux-contour-line' : id) + '-source.mp3', cache);
   if (!await access(source).then(() => true, () => false)) {
     const response = await fetch('https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128', {
       method: 'POST', headers: { 'xi-api-key': elevenLabsKey(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model_id: 'music_v2_5', force_instrumental: true,
         music_length_ms: Math.round((loopBars + 4) * 4 * 60 / bpm * 1000),
-        prompt: brief + ' Instrumental music for a miniature marble race, exactly ' + bpm + ' BPM. ' +
+        prompt: id === 'crux' ? brief : brief + ' Instrumental music for a miniature marble race, exactly ' + bpm + ' BPM. ' +
           (loopBars === 8 ? 'Repeat a four-bar motif with a consistent first beat and constant orchestration for all twelve bars.' : 'Following the final turnaround, repeat the opening four bars so the cut can loop on the downbeat.') +
           ' Begin in the groove, continue at full pulse through the last beat. No intro, outro, breaks, vocals, sound effects, bright percussion, or big dynamic accents.',
       }),
@@ -115,7 +119,7 @@ for (const [id, bpm, brief, loopBars = 8] of cruxOnly ? [] : scores) {
     if (audio.length < 1000) throw new Error('Incomplete score for ' + id);
     await writeFile(source, audio);
   }
-  const { start, end } = chooseLoop(fileURLToPath(source), bpm, loopBars);
+  const { start, end } = chooseLoop(fileURLToPath(source), bpm, loopBars, id === 'crux');
   const overlap = .16;
   // Put the crossfade at the very end. Its final sample leads directly into the
   // next sample of the recording at the loop head, preserving the pulse.
@@ -130,20 +134,8 @@ for (const [id, bpm, brief, loopBars = 8] of cruxOnly ? [] : scores) {
     const loop = join(work, 'loop.wav');
     const mastered = join(work, 'loop.mp3');
     execFileSync('ffmpeg', ['-v', 'error', '-i', fileURLToPath(source), '-filter_complex', filter, '-map', '[out]', '-c:a', 'pcm_f32le', loop]);
-    masterLoop(id, ['-i', loop], mastered);
+    masterLoop(id, ['-i', loop], mastered, id === 'crux' ? cruxScore.title : undefined);
     await rename(mastered, output);
     console.log('Generated music-' + id + ' (' + (end - start).toFixed(2) + ' s)');
-  } finally { await rm(work, { recursive: true, force: true }); }
-}
-
-const cruxScore = new URL('music-crux.mp3', directory);
-if (cruxOnly || !await access(cruxScore).then(() => true, () => false)) {
-  const work = await mkdtemp(new URL('crux-', cache));
-  try {
-    const pcm = join(work, 'score.f32'), mastered = join(work, 'score.mp3');
-    const duration = await renderCruxScore(pcm);
-    masterLoop('crux', ['-f', 'f32le', '-ar', '44100', '-ac', '2', '-i', pcm], mastered, cruxScoreTitle);
-    await rename(mastered, cruxScore);
-    console.log('Generated music-crux (' + duration.toFixed(2) + ' s)');
   } finally { await rm(work, { recursive: true, force: true }); }
 }
