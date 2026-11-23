@@ -25,7 +25,8 @@ export type CourseScenery = THREE.Group & {
   setRaceTime?(seconds: number): void
   frameCamera?(camera: THREE.Camera): void
   updateStations?(gates: readonly RaceCheckpoint[] | undefined, seconds: number): void
-  showCutMarble?(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number): boolean
+  showCutMarble?(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number,
+    field: readonly MarbleState[], alpha: number): boolean
 }
 
 export function createCourseScenery(track: CourseTrack, onReady?: () => void): CourseScenery {

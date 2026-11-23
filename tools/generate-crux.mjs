@@ -23,19 +23,27 @@ function section(name, ...pieces) {
   sections.push({ name, start, end: length })
 }
 
-// Six uninterrupted gallery straights leave room for the approach, the open
-// transfer and the receiving deck. Five banked turnarounds link the galleries.
+// The blade gallery slips sideways and back before its straight checkpoint apron.
+const slalomArc = 8.2, slalomRadius = 32
+const slalom = [-1, 1, 1, -1].map(side => ({ length: slalomArc, curvature: side / slalomRadius }))
+// Two separately banked quarter turns make a squared-off return. Their cross
+// gallery is wide enough for a freestanding elbow island and two passing lines.
+const hookRadius = 23, hookLink = 15
+const leadIn = [1, 3, 5].map(n => ({ length: 4, curvature: n / (6 * hookRadius) }))
+const quarterTurn = [...leadIn, { length: Math.PI * hookRadius / 2 - 12, curvature: 1 / hookRadius }, ...leadIn.toReversed()]
+const quarterLength = quarterTurn.reduce((sum, piece) => sum + piece.length, 0)
+
 section('Belay Gate', line(18))
 section('Headwall Launch', line(109))
 section('Chalk Velodrome', ...turnaround(23, 1))
 section('Dyno Straight', line(138))
 section('Arête Hairpin', ...turnaround(24, -1))
-section('Ribbon Traverse', line(86))
+section('Blade Slalom', line(5), ...slalom, line(81 - 4 * slalomArc))
 section('Highball Bend', ...turnaround(23.5, 1))
 section('Slab Flight', line(139))
 section('Compass Turn', ...turnaround(24.5, -1))
-section('Final Traverse', line(88))
-section('Summit Hook', ...turnaround(23, 1))
+section('Volume Traverse', line(88))
+section('Double-Apex Hook', ...quarterTurn, line(hookLink), ...quarterTurn)
 section('Summit Runout', line(107))
 
 const jumps = [
@@ -55,6 +63,8 @@ const jumps = [
 const layout = {
   seed, origin: { x: -73, z: -121, angle: 0 }, laneCount: 6, halfWidth: 4.35,
   startS: 1.1, finishS: length - 9, launchTrims: [.75, .61, .47, .34, .22, .12],
+  slalom: { start: sections[5].start + 5, arc: slalomArc },
+  hook: { linkStart: sections[10].start + quarterLength, linkEnd: sections[10].start + quarterLength + hookLink },
   jumps, sections, runs,
 }
 await writeFile(new URL('../src/courses/crux-layout.json', import.meta.url), JSON.stringify(layout, null, 2) + '\n')

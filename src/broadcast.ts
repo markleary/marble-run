@@ -7,6 +7,7 @@ import type { CourseTrack } from './track';
 import type { CourseId } from './courses/catalog';
 import type { RaceCheckpoint } from './cruxCompetition';
 import { cruxJumps } from './courses/crux';
+import { cruxObstacleBoards, type CruxBoardId } from './courses/cruxObstacles';
 import { cruxRack } from './courses/cruxCheckpoints';
 import { createCourseScenery, type CourseScenery } from './scenery';
 import keplerNebula from './assets/kepler-nebula.jpg';
@@ -15,6 +16,12 @@ import { keplerStars } from './keplerStars';
 
 type Offset = [number, number, number];
 interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean; holdPastEnd?: number }
+// Forward, height and lateral offsets. The low uphill blade view shows lanes
+// parting, while the elevated corner view exposes the elbow's two openings.
+const obstacleViews: Record<CruxBoardId, Offset> = {
+  bumper: [-6.7, 5.8, -2.1], blade: [-9.2, 4.6, .95],
+  volume: [-8.6, 6.2, 2.7], return: [-7.8, 7.6, 1.6],
+};
 const shots: Record<CourseId, Shot[]> = {
   prism: [
     { offset: [4.5, 4.2, -7.8] }, { offset: [4.5, 4.2, -7.8] },
@@ -405,7 +412,7 @@ export class RaceBroadcast {
       const mesh = this.balls[marble.id];
       if (marble.cutAt !== undefined) {
         const gate = gates?.find(g => g.number === marble.cutAt);
-        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime);
+        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime, marbles, alpha);
         continue;
       }
       mesh.visible = true;
@@ -465,16 +472,18 @@ export class RaceBroadcast {
     let feature = '';
     let featureFrame: THREE.Vector3[] | undefined;
     const station = gates?.find(g => g.cut && (g.phase === 'loading'
-      || (g.phase === 'ready' && lead >= g.s - cruxRack.funnelLength - 1 && lead <= g.s + cruxRack.seatOffset + 1)
+      || (g.phase === 'ready' && lead >= g.entryS - 1 && lead <= g.s + cruxRack.seatOffset + 1)
       || (g.releasedAt !== null && elapsed - g.releasedAt < 1.1)));
     const jump = this.track.id === 'crux' && cruxJumps.find(j => lead >= j.rampStart - 2 && lead <= j.catchEnd);
+    const board = this.track.id === 'crux' && cruxObstacleBoards.find(b => lead >= b.start - 2 && center <= b.end + 1.3);
     if (station) {
-      // Keep the line, the actual row of survivors and the chrome rail together.
-      // In portrait look more along the row, so the marbles can remain large.
       feature = 'gate-' + station.number;
-      const loading = station.phase !== 'ready';
-      const far = station.s + cruxRack.barOffset + .9;
-      const near = loading ? station.s + .70 : Math.max(station.s - cruxRack.funnelLength + 1, lead - 2.3);
+      // Stay on the actual timing stripe through the last entrance, including a close finish.
+      const lastEntry = station.arrivals[station.field - 1];
+      const loading = lastEntry !== undefined && elapsed >= lastEntry.time + .45;
+      feature += loading ? '-rack' : '-entry';
+      const far = loading ? station.s + cruxRack.barOffset + .9 : station.entryS + 3.2;
+      const near = loading ? station.s - .9 : station.entryS - 3.2;
       const anchor = this.track.sample(loading ? station.s + 2.9 : (far + near) / 2);
       this.focusGoal.set(anchor.x, anchor.y + .98, anchor.z);
       const along = this.camera.aspect < .8 ? 7.4 : 9.7;
@@ -501,6 +510,19 @@ export class RaceBroadcast {
         this.focusGoal.lerp(midpoint, .38);
         featureFrame = [...pack.map(m => this.balls[m.id].position),
           new THREE.Vector3(lip.x, lip.y + .1, lip.z), new THREE.Vector3(receiver.x, receiver.y, receiver.z)];
+      }
+    } else if (board) {
+      feature = board.id;
+      const [forward, height, side] = obstacleViews[board.id];
+      offset = [forward * p.tx + side * p.rx, height, forward * p.tz + side * p.rz];
+      const aim = this.track.sample(center + .8);
+      this.focusGoal.set(aim.x, aim.y + .4, aim.z);
+      // Frame the obstacle and the available routes even if the entire pack
+      // banks to one side. Portrait uses the same shot with a wider lens fit.
+      featureFrame = pack.map(m => this.balls[m.id].position);
+      for (const lateral of [-1, 1]) {
+        const edge = this.track.sample(center, lateral * (this.track.halfWidth - .3));
+        featureFrame.push(new THREE.Vector3(edge.x, edge.y + .35, edge.z));
       }
     } else if (this.shot === finishShot) {
       const line = this.track.sample(this.track.finishS - 0.35);

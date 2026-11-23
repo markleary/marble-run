@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import type { CourseTrack } from './track'
 import { cruxDeckSpans, cruxJumps, cruxJumpShield } from './courses/crux'
+import { cruxObstacleBoards } from './courses/cruxObstacles'
+import { createCruxObstacleScenery, cruxBoardFinishes } from './cruxObstacleScenery'
 import { createCruxStations } from './cruxStations'
 import { createCruxHall } from './cruxHall'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, woodTexture, type Material } from './sceneryKit'
@@ -56,6 +58,8 @@ export function createCruxScenery(track: CourseTrack) {
   const mat = material('#ded3bb', .82)
   const wood = material('#e4ca94', .66)
   asphalt.map = slate.map = mat.map = trackGrain(); wood.map = woodTexture()
+  const boardFinishes = cruxBoardFinishes()
+  const cobalt = material('#334eb6', .49), green = material('#258b51', .56)
   const holds = palette.map(color => material(color, .65))
   const sTop = track.sections, w = track.halfWidth
   const at = (s: number, l: number, dy = 0) => lifted(track.sample(s, l), dy)
@@ -65,24 +69,39 @@ export function createCruxScenery(track: CourseTrack) {
   }
   const ribbon = (m: Material, start: number, end: number, left: number, right: number, height = 0, bands = 1) =>
     batch.surface(m, start, end, (s, t) => at(s, left + (right - left) * t, height), Math.abs(right - left), bands)
+  const shields = new SceneryBatch()
+  const plexiglass = material('#d5edeb', .22)
+  plexiglass.transparent = true; plexiglass.opacity = .055; plexiglass.depthWrite = false
+  plexiglass.forceSinglePass = true
 
   // Build each continuous piece independently. No rail, floor, or shadow
   // crosses the open air between the takeoff lip and its receiving deck.
+  // Keep the floor continuous through the climbing panels, with one material
+  // at any distance so pale plywood never flickers against the ordinary deck.
+  const deckPieces = cruxDeckSpans.flatMap(span => {
+    const breaks = [span.start, span.end, ...cruxObstacleBoards.flatMap(board => [board.start, board.end])
+      .filter(s => s > span.start && s < span.end)].sort((a, b) => a - b)
+    return breaks.slice(1).map((end, i) => {
+      const start = breaks[i], middle = (start + end) / 2
+      return { start, end, surface: span.surface, board: cruxObstacleBoards.find(b => middle > b.start && middle < b.end)?.id }
+    })
+  })
   for (const [index, section] of sTop.entries()) {
     const bowl = [2, 4, 6, 8, 10].includes(index)
-    for (const span of cruxDeckSpans) {
+    batch = new SceneryBatch()
+    for (const span of deckPieces) {
       const start = Math.max(span.start, section.start), end = Math.min(span.end, section.end)
       if (start >= end) continue
-      batch = new SceneryBatch()
       const wooden = span.surface === 'wood', grooved = index === 0
       const receiver = cruxJumps.some(jump => start === jump.landing)
-      const floor = wooden ? wood : receiver ? slate : asphalt
+      const board = span.board, lightBoard = board === 'blade' || board === 'volume'
+      const floor = board ? (lightBoard ? boardFinishes.ivory : boardFinishes.grit) : wooden ? wood : receiver ? slate : asphalt
       const bands = grooved ? 60 : bowl ? 30 : 8
       ribbon(floor, start, end, -w, w, 0, bands)
       // Segment joints and edge rulings make speed readable on the long chutes.
-      for (let s = start + 2.65; s < end - .08; s += wooden ? 3.7 : 7.5)
+      for (let s = start + (board ? 6.25 : 2.65); s < end - .08; s += board ? 12.5 : wooden ? 3.7 : 7.5)
         ribbon(wooden ? charcoal : metal, s, s + .026, -w, w, .012, bands)
-      if (grooved || bowl) {
+      if (!board && (grooved || bowl)) {
         for (let lane = 1; lane < track.laneCount; lane++) {
           const l = -w + lane * track.laneWidth
           ribbon(grooved ? charcoal : saffron, start, end, l - .037, l + .037, .017)
@@ -90,23 +109,45 @@ export function createCruxScenery(track: CourseTrack) {
       }
       for (const side of [-1, 1]) {
         const l = side * w
-        ribbon(white, start, end, side * (w - .32), side * (w - .25), .020)
-        ribbon(receiver ? teal : saffron, start, end, side * (w - .19), side * (w - .08), .020)
+        if (board) {
+          ribbon(charcoal, start, end, side * (w - .20), side * w, .025)
+          ribbon(steel, start, end, side * (w - .22), side * (w - .19), .026)
+        } else {
+          ribbon(white, start, end, side * (w - .32), side * (w - .25), .020)
+          ribbon(receiver ? teal : saffron, start, end, side * (w - .19), side * (w - .08), .020)
+        }
         batch.strip(charcoal, start, end, (s, k) => rim(s, side, .035, k ? .12 : -.39), .51)
         batch.strip(metal, start, end, (s, k) => rim(s, side, .043, k ? -.09 : -.15), .06)
         batch.strip(metal, start, end, (s, k) => at(s, l, k ? .20 : .03), .17)
-        batch.strip(charcoal, start, end, (s, k) => rim(s, side, .014, track.wallHeight(s) - (k ? .16 : .025)), .14)
-        batch.strip(steel, start, end, (s, k) => rim(s, side, k ? .085 : -.035, track.wallHeight(s) - .023), .12)
+        // Low skirting and clear polycarbonate keep foreground rails out of
+        // the racing line in the tight obstacle shots. The thin rim follows
+        // the physical wall wherever deflected marbles need a taller guard.
+        const skirt = board ? .34 : 2.15
+        batch.strip(charcoal, start, end, (s, k) => rim(s, side, .014, skirt - (k ? .16 : .025)), .14)
+        batch.strip(steel, start, end, (s, k) => rim(s, side, k ? .085 : -.035, skirt - .023), .12)
         for (let s = start + .18; s < end; s += 3.1) {
-          batch.rod(metal, rim(s, side, .026, -.22), rim(s, side, .026, track.wallHeight(s) - .10), .055, 5)
+          batch.rod(metal, rim(s, side, .026, -.22), rim(s, side, .026, skirt - .10), .055, 5)
           batch.rod(steel, rim(s, side, .04, .09), rim(s, side, .095, .09), .078, 6)
         }
-        if (bowl) {
+        for (let s = start; s < end; s += 2.0) {
+          const next = Math.min(end, s + 2.0)
+          if (track.wallHeight(s) <= skirt && track.wallHeight(next) <= skirt) continue
+          shields.strip(plexiglass, s, next, (d, k) => rim(d, side, .02, k ? track.wallHeight(d) : skirt), 1)
+          batch.strip(steel, s, next, (d, k) => rim(d, side, .02, track.wallHeight(d) - (k ? .033 : .010)), .023)
+        }
+        if (board === 'return') {
+          for (let s = start; s < end; s += 6.5) {
+            const color = Math.floor((s - start) / 6.5) % 2 ? green : cobalt
+            const last = Math.min(end, s + 6.5)
+            batch.strip(color, s, last, (d, k) => at(d, l, k ? .24 : .03), .21)
+            ribbon(color, s, last, side * (w - .40), side * w, .030)
+          }
+        } else if (!board && bowl) {
           for (let s = start + .65, j = 0; s + 1.4 < end; s += 1.4, j++) {
             const curb = side * (w - .51)
             ribbon(j % 2 ? white : holds[(index / 2) % holds.length], s, s + 1.4, curb, side * (w - .76), .025)
           }
-        } else {
+        } else if (!board) {
           for (let s = start + 4; s < end - 4; s += 10) {
             for (let d = 0; d < 2; d++) {
               const back = s + .66 * d
@@ -121,14 +162,11 @@ export function createCruxScenery(track: CourseTrack) {
       // Follow the deeply cupped cross section underneath as well; a flat chord
       // spanning the raised shoulders would come through the center of the turn.
       ribbon(charcoal, start, end, -w, w, -.39, bowl ? 24 : 8)
-      batch.finish(group)
     }
+    batch.finish(group)
   }
+  createCruxObstacleScenery(track, group)
   batch = new SceneryBatch()
-  const shields = new SceneryBatch()
-  const plexiglass = material('#d5edeb', .22)
-  plexiglass.transparent = true; plexiglass.opacity = .055; plexiglass.depthWrite = false
-  plexiglass.forceSinglePass = true
   for (const jump of cruxJumps) {
     for (const side of [-1, 1]) {
       const [lipBase, lipTop, catchBase, catchTop] = cruxJumpShield(track, jump, side).map(p => lifted(p, 0))
@@ -166,8 +204,11 @@ export function createCruxScenery(track: CourseTrack) {
   // Roofed, freestanding bouldering towers occupy the islands inside three turns.
   // Their tops sit below the banking so the camera can always see the racing line.
   for (const [tower, index] of [2, 6, 10].entries()) {
-    const section = sTop[index], s = (section.start + section.end) / 2
-    const p = track.sample(s), radius = (section.end - section.start) / Math.PI
+    const section = sTop[index]
+    // The last turnaround has two quarter-circles separated by a straight.
+    const s = section.start + (section.end - section.start) * (index === 10 ? .23 : .5)
+    const p = track.sample(s), before = track.sample(s - .5), after = track.sample(s + .5)
+    const radius = 1 / Math.hypot(after.tx - before.tx, after.tz - before.tz)
     const x = p.x + p.rx * radius, z = p.z + p.rz * radius
     const height = Math.max(2, Math.min(20, p.y - floorY - 1.7))
     const yaw = [.27, -.42, .17][tower], footprint = 4.8

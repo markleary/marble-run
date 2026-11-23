@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 import type { CourseTrack } from './courseGeometry'
-import { cruxFunnelRails, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
+import { cruxFunnelTubes, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
 import type { RaceCheckpoint } from './cruxCompetition'
 import type { MarbleState } from './simulation'
 
@@ -8,13 +8,11 @@ import type { MarbleState } from './simulation'
  * the release bar. The brakes engage only after a ball physically reaches its pad. */
 export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: RaceCheckpoint[], bodies: RAPIER.RigidBody[]) {
   const racks = gates.filter(gate => gate.cut).map(gate => {
-    const r = cruxRack.railHeight / 2
-    for (const { start, end } of cruxFunnelRails(track.halfWidth)) {
-      const a = track.sample(gate.s + start.s, start.lateral), b = track.sample(gate.s + end.s, end.lateral)
+    for (const { start: a, end: b, radius } of cruxFunnelTubes(track, gate.s, gate.number)) {
       const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
       const length = Math.hypot(dx, dy, dz), norm = Math.sqrt(2 * length * (length + dy))
-      world.createCollider(RAPIER.ColliderDesc.capsule(length / 2, r)
-        .setTranslation((a.x + b.x) / 2, (a.y + b.y) / 2 + r, (a.z + b.z) / 2)
+      world.createCollider(RAPIER.ColliderDesc.capsule(length / 2, radius)
+        .setTranslation((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
         .setRotation({ x: dz / norm, y: 0, z: -dx / norm, w: (length + dy) / norm })
         .setFriction(.02).setRestitution(.03))
     }
@@ -26,7 +24,7 @@ export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: 
       .setFriction(.05).setRestitution(0))
     const apron = track.sample(gate.s + cruxRack.launchEnd)
     const launchGrade = (apron.y - p.y) / (cruxRack.launchEnd - cruxRack.barOffset)
-    return { gate, bar, launchGrade, inlet: [] as number[], lastSeatTime: 0 }
+    return { gate, bar, launchGrade, inlet: [] as number[] }
   })
 
   return (marbles: MarbleState[], elapsed: number, dt: number) => {
@@ -34,12 +32,11 @@ export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: 
       const { gate, bar } = rack
       const { tx, tz, rx, rz } = gate.line
       // Padded inlet rollers progressively scrub excess speed over the taper.
-      // Limit braking force on both translation and roll; the rails and live
-      // marble contacts still decide who reaches the two-abreast throat first.
+      // Places have already been awarded at the entrance to these rollers.
       if (gate.releasedAt === null) {
         for (const marble of marbles) {
           const remaining = gate.s - marble.distance
-          if (marble.stagingAt || marble.cutAt || remaining < 0 || remaining > cruxRack.funnelLength) continue
+          if (marble.cutAt || remaining <= track.radius || remaining > cruxRack.funnelLength) continue
           const body = bodies[marble.id], velocity = body.linvel()
           const forward = velocity.x * tx + velocity.z * tz
           const limit = Math.sqrt(4.2 ** 2 + 4 * remaining)
@@ -70,7 +67,7 @@ export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: 
         const along = dx * tx + dz * tz, lateral = dx * rx + dz * rz
         const earlier = previousAlong
         previousAlong = along
-        if (gate.seated.includes(id)) continue
+        if (along < -track.radius || gate.seated.includes(id)) continue
         rack.inlet[slot] ??= lateral
         const seat = cruxRackSlot(capacity, slot)
         if (Math.abs(cruxRack.seatOffset - along) < .10 && Math.abs(seat - lateral) < .10 && marble.speed < .38) {
@@ -79,7 +76,6 @@ export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: 
           body.setBodyType(RAPIER.RigidBodyType.Fixed, true)
           marble.speed = 0
           gate.seated.push(id)
-          rack.lastSeatTime = elapsed
           continue
         }
         // Fan out after clearing the funnel nose. Space successive transfers
@@ -106,7 +102,10 @@ export function attachCruxRacks(world: RAPIER.World, track: CourseTrack, gates: 
         }, true)
       }
       const last = gate.arrivals[capacity]
-      if (last && gate.seated.length === capacity && elapsed >= Math.max(last.time, rack.lastSeatTime) + .55) {
+      if (last && marbles[last.id].cutAt === gate.number && gate.seated.length === capacity) {
+        gate.pocketAt ??= elapsed
+      }
+      if (gate.pocketAt !== null && elapsed >= gate.pocketAt + cruxRack.pocketTravelSeconds + .15) {
         world.removeCollider(bar, true)
         for (const id of gate.seated) {
           bodies[id].setBodyType(RAPIER.RigidBodyType.Dynamic, true)

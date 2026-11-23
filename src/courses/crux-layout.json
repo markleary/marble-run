@@ -8,7 +8,7 @@
   "laneCount": 6,
   "halfWidth": 4.35,
   "startS": 1.1,
-  "finishS": 1171.7079331235957,
+  "finishS": 1185.7079331235955,
   "launchTrims": [
     0.75,
     0.61,
@@ -17,6 +17,14 @@
     0.22,
     0.12
   ],
+  "slalom": {
+    "start": 467.65485471872023,
+    "arc": 8.2
+  },
+  "hook": {
+    "linkStart": 1024.579617607313,
+    "linkEnd": 1039.579617607313
+  },
   "jumps": [
     {
       "sectionIndex": 1,
@@ -57,11 +65,11 @@
     {
       "sectionIndex": 11,
       "name": "Summit Gap",
-      "diveStart": 1079.9079331235957,
-      "rampStart": 1109.9079331235957,
-      "takeoff": 1115.7079331235957,
-      "landing": 1123.3079331235956,
-      "catchEnd": 1167.3079331235956,
+      "diveStart": 1093.9079331235955,
+      "rampStart": 1123.9079331235955,
+      "takeoff": 1129.7079331235955,
+      "landing": 1137.3079331235954,
+      "catchEnd": 1181.3079331235954,
       "dive": 5.383491892600432,
       "rise": 2.39,
       "drop": 5.1
@@ -94,7 +102,7 @@
       "end": 462.65485471872023
     },
     {
-      "name": "Ribbon Traverse",
+      "name": "Blade Slalom",
       "start": 462.65485471872023,
       "end": 548.6548547187202
     },
@@ -114,19 +122,19 @@
       "end": 888.4513020910304
     },
     {
-      "name": "Final Traverse",
+      "name": "Volume Traverse",
       "start": 888.4513020910304,
       "end": 976.4513020910304
     },
     {
-      "name": "Summit Hook",
+      "name": "Double-Apex Hook",
       "start": 976.4513020910304,
-      "end": 1073.7079331235957
+      "end": 1087.7079331235955
     },
     {
       "name": "Summit Runout",
-      "start": 1073.7079331235957,
-      "end": 1180.7079331235957
+      "start": 1087.7079331235955,
+      "end": 1194.7079331235955
     }
   ],
   "runs": [
@@ -231,7 +239,27 @@
       "curvature": -0.004166666666666667
     },
     {
-      "length": 86,
+      "length": 5,
+      "curvature": 0
+    },
+    {
+      "length": 8.2,
+      "curvature": -0.03125
+    },
+    {
+      "length": 8.2,
+      "curvature": 0.03125
+    },
+    {
+      "length": 8.2,
+      "curvature": 0.03125
+    },
+    {
+      "length": 8.2,
+      "curvature": -0.03125
+    },
+    {
+      "length": 48.2,
       "curvature": 0
     },
     {
@@ -331,48 +359,64 @@
       "curvature": 0
     },
     {
-      "length": 5,
-      "curvature": 0.004347826086956522
+      "length": 4,
+      "curvature": 0.007246376811594203
     },
     {
-      "length": 5,
-      "curvature": 0.013043478260869565
-    },
-    {
-      "length": 5,
+      "length": 4,
       "curvature": 0.021739130434782608
     },
     {
-      "length": 5,
-      "curvature": 0.030434782608695653
+      "length": 4,
+      "curvature": 0.036231884057971016
     },
     {
-      "length": 5,
-      "curvature": 0.0391304347826087
-    },
-    {
-      "length": 47.25663103256524,
+      "length": 24.12831551628262,
       "curvature": 0.043478260869565216
     },
     {
-      "length": 5,
-      "curvature": 0.0391304347826087
+      "length": 4,
+      "curvature": 0.036231884057971016
     },
     {
-      "length": 5,
-      "curvature": 0.030434782608695653
-    },
-    {
-      "length": 5,
+      "length": 4,
       "curvature": 0.021739130434782608
     },
     {
-      "length": 5,
-      "curvature": 0.013043478260869565
+      "length": 4,
+      "curvature": 0.007246376811594203
     },
     {
-      "length": 5,
-      "curvature": 0.004347826086956522
+      "length": 15,
+      "curvature": 0
+    },
+    {
+      "length": 4,
+      "curvature": 0.007246376811594203
+    },
+    {
+      "length": 4,
+      "curvature": 0.021739130434782608
+    },
+    {
+      "length": 4,
+      "curvature": 0.036231884057971016
+    },
+    {
+      "length": 24.12831551628262,
+      "curvature": 0.043478260869565216
+    },
+    {
+      "length": 4,
+      "curvature": 0.036231884057971016
+    },
+    {
+      "length": 4,
+      "curvature": 0.021739130434782608
+    },
+    {
+      "length": 4,
+      "curvature": 0.007246376811594203
     },
     {
       "length": 107,

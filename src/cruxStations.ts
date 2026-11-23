@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { cruxCheckpoints, cruxFunnelRails, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
+import { cruxCheckpoints, cruxFunnelRails, cruxFunnelTubes, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
 import { createCruxRejectChute } from './cruxRejectChute'
 import type { MarbleState } from './simulation'
 import type { RaceCheckpoint } from './cruxCompetition'
@@ -37,6 +37,13 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
   const white = material(cream, .54), red = material('#e65336', .48)
   const idle = material('#519c97', .45), frame = new SceneryBatch()
   const width = track.halfWidth
+  const entryLabel = material(cream, .58)
+  entryLabel.map = canvasTexture(256, 80, ctx => {
+    ctx.fillStyle = '#155653'; ctx.fillRect(0, 0, 256, 80)
+    ctx.fillStyle = cream; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.font = '800 60px Barlow Condensed, Arial Narrow, sans-serif'
+    ctx.fillText('ENTRY', 128, 43)
+  })
   const outLabel = material('#ffffff', .63)
   outLabel.map = canvasTexture(256, 80, ctx => {
     ctx.fillStyle = '#64322c'; ctx.fillRect(0, 0, 256, 80)
@@ -45,7 +52,7 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
     ctx.fillText('OUT', 128, 42)
   })
 
-  const stations = cruxCheckpoints(track.sections).map(({s, number}) => {
+  const stations = cruxCheckpoints(track.sections).map(({s, entryS, number}) => {
     const accent = stationColors[number - 1], paint = material(accent, .49, .16)
     const at = (ds: number, lateral: number, up = 0) => lifted(track.sample(s + ds, lateral), up)
     const metalwork = new SceneryBatch(), pass = new SceneryBatch()
@@ -84,27 +91,46 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       return THREE.MathUtils.lerp(rail.start.lateral, rail.end.lateral, u) - cruxRack.railHeight / 2
     }
     plate(frame, rubber, -cruxRack.funnelLength, end, -width + .12, width - .12, .027)
-    // Dark rubber apron and a striped nose distinguish the capture cassette from
-    // both the preceding ramp and the uninterrupted center lane on an open split.
-    plate(frame, paint, -.10, .10, -width + .10, width - .10, .032)
+    const entry = entryS - s
+    // The leading edge of the white band is the scored line, before any brake ribs.
+    plate(frame, white, entry, entry + .23, -width + .1, width - .1, .044)
+    for (const side of [-1, 1]) {
+      const lens = at(entry, side * (width + .06), .47)
+      frame.box(graphite, lens, [.29, .78, .35], yaw)
+      frame.rod(paint, lens, lens.clone().addScaledVector(across, -side * .18), .12)
+      const tag = lens.clone().addScaledVector(across, side * .45).addScaledVector(worldUp, .53)
+      frame.box(graphite, tag, [1.4, .46, .15], yaw)
+      for (const face of [-1, 1]) {
+        const transform = new THREE.Matrix4().makeRotationY(yaw + (face < 0 ? Math.PI : 0))
+          .setPosition(tag.clone().addScaledVector(normal, face * .079))
+        frame.add(entryLabel, new THREE.PlaneGeometry(1.33, .41), transform)
+      }
+    }
     plate(metalwork, graphite, cruxRack.seatOffset - .76, cruxRack.barOffset + .39, -width + .15, width - .15, .046)
     for (let block = 0; block < 22; block++) {
       const l = -width + .17 + (2 * width - .34) * block / 22
       plate(metalwork, block % 2 ? white : red, cruxRack.barOffset + .29, cruxRack.barOffset + .58,
         l, l + (2 * width - .34) / 22, .049)
     }
-    // Low-profile brake ribs follow the converging width and end at the beam.
+    // Low-profile brake ribs follow the converging width and end at the fork.
     for (let d = -cruxRack.funnelLength + .70; d < -.45; d += .88) {
       const half = innerEdge(d) - .14
       plate(metalwork, graphite, d, d + .105, -half, half, .048)
       plate(metalwork, steel, d, d + .025, -half, half, .050)
     }
-    for (const rail of rails) {
-      const a = at(rail.start.s, rail.start.lateral, cruxRack.railHeight / 2)
-      const b = at(rail.end.s, rail.end.lateral, cruxRack.railHeight / 2)
-      metalwork.rod(paint, a, b, cruxRack.railHeight / 2, 12)
-      metalwork.rod(steel, a.clone().addScaledVector(worldUp, cruxRack.railHeight * .43),
-        b.clone().addScaledVector(worldUp, cruxRack.railHeight * .43), .045, 6)
+    for (const tube of cruxFunnelTubes(track, s, number)) {
+      const a = new THREE.Vector3().copy(tube.start), b = new THREE.Vector3().copy(tube.end)
+      const direction = b.clone().sub(a)
+      const shape = new THREE.CapsuleGeometry(tube.radius, direction.length(), 3, 12)
+      const transform = new THREE.Matrix4().makeRotationFromQuaternion(
+        new THREE.Quaternion().setFromUnitVectors(worldUp, direction.normalize())).setPosition(a.clone().lerp(b, .5))
+      metalwork.add(tube.upper ? steel : paint, shape, transform)
+      if (tube.upper) {
+        metalwork.rod(graphite, b.clone().addScaledVector(worldUp, -.71), b, .075, 8)
+      } else {
+        metalwork.rod(steel, a.clone().addScaledVector(worldUp, cruxRack.railHeight * .43),
+          b.clone().addScaledVector(worldUp, cruxRack.railHeight * .43), .045, 6)
+      }
     }
     // Fixed straight-through seams remain visible when the capture guides are parked.
     for (const side of [-1, 1]) {
@@ -184,7 +210,7 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       const seated = gate?.seated.length ?? 0
       machine.visible = count > 0; bypass.visible = count === 0
       rebuildSeats(count)
-      reject.switchBlade.visible = !!gate?.cut && gate.arrivals.length === gate.field
+      reject.jetLights.visible = gate?.divertedAt != null && seconds >= gate.divertedAt && !released
       // Retract the gate into the bed, leaving the line visible as the pack launches.
       const progress = releasedAt === null ? 0 : THREE.MathUtils.smoothstep(seconds - releasedAt, 0, .24)
       bar.position.y = -.93 * progress
@@ -202,10 +228,11 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
     updateStations(gates: readonly RaceCheckpoint[] | undefined, seconds: number) {
       for (const station of stations) station.update(gates?.find(g => g.number === station.number), seconds)
     },
-    showCutMarble(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number) {
+    showCutMarble(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number,
+      field: readonly MarbleState[], alpha: number) {
       const last = gate.arrivals[gate.field - 1]
-      if (last?.id !== marble.id) return false
-      stations[gate.number - 1].roll(mesh, marble, seconds - last.time)
+      if (last?.id !== marble.id || gate.divertedAt === null) return false
+      stations[gate.number - 1].roll(mesh, marble, seconds, gate.divertedAt, gate.pocketAt, field, alpha)
       return true
     },
   }
