@@ -1,16 +1,17 @@
 import * as THREE from 'three'
 import type { CourseTrack } from './track'
+import { cruxRack } from './courses/cruxCheckpoints'
 import type { MarbleState } from './simulation'
 import { SceneryBatch, lifted, type Material } from './sceneryKit'
 
 /** Once the timing beam has classified the last arrival, a short return chute
  * takes its marble to a pocket beside the starting rack. Both the visible
  * chute and the post-cut roll follow this curve. */
-export function createCruxRejectChute(track: CourseTrack, beam: number, machine: THREE.Group,
+export function createCruxRejectChute(track: CourseTrack, throat: number, machine: THREE.Group,
   finishes: { rubber: Material; stripe: Material; chrome: Material; label: Material }) {
   const { rubber, stripe, chrome, label } = finishes
   const fixed = new SceneryBatch(), blade = new SceneryBatch()
-  const at = (ds: number, l: number, dy: number) => lifted(track.sample(beam + ds, l), dy)
+  const at = (ds: number, l: number, dy: number) => lifted(track.sample(throat + ds, l), dy)
   const pocket = -(track.halfWidth - .60)
   const center = new THREE.CubicBezierCurve3(at(.85, -.95, .105), at(1.6, -1.86, .105),
     at(1.96, pocket, .10), at(4.33, pocket, .095))
@@ -36,7 +37,7 @@ export function createCruxRejectChute(track: CourseTrack, beam: number, machine:
     new THREE.Vector2(.54, .25), new THREE.Vector2(.475, .12),
     new THREE.Vector2(.38, .012),
   ], 24, 0, Math.PI * 1.48)
-  const lane = track.sample(beam)
+  const lane = track.sample(throat)
   const yaw = Math.atan2(lane.tx, lane.tz)
   fixed.add(stripe, rim, new THREE.Matrix4().makeRotationY(yaw - Math.PI * .74).setPosition(cup))
   fixed.rod(rubber, cup.clone().add(new THREE.Vector3(0, -.026, 0)), cup, .47, 24)
@@ -52,13 +53,15 @@ export function createCruxRejectChute(track: CourseTrack, beam: number, machine:
 
   const join = center.getPoint(0), start = new THREE.Vector3(), axis = new THREE.Vector3()
   const rotation = new THREE.Quaternion(), upstream = new THREE.Vector3()
-  function roll(mesh: THREE.Object3D, marble: MarbleState, age: number) {
-    // The rack can release 0.55 s after a late cut. Seat the last marble just before then.
-    const t = THREE.MathUtils.clamp(age / .50, 0, 1)
-    const progress = 1 - (1 - t) ** 1.45
+  function roll(mesh: THREE.Object3D, marble: MarbleState, seconds: number, divertedAt: number, pocketAt: number | null) {
+    // Pull into the side guide immediately, leaving the throat clear if a qualifier
+    // was passed inside the funnel. Wait here until the last qualifying pad fills.
+    const guideTime = Math.min(seconds, pocketAt ?? seconds) - divertedAt
+    const guide = .63 * (1 - (1 - THREE.MathUtils.clamp(guideTime / .38, 0, 1)) ** 1.45)
+    const t = pocketAt === null ? 0 : THREE.MathUtils.clamp((seconds - pocketAt) / cruxRack.pocketTravelSeconds, 0, 1)
+    const progress = guide + (1 - guide) * (1 - (1 - t) ** 1.45)
     start.copy(marble.position)
-    // Use the last actual pose and incoming heading at the beam. The wheel
-    // then aligns with the return guide, rolling to rest on the padded base.
+    // Start at the actual pose and heading where the marble stopped at the fork.
     upstream.subVectors(marble.position, marble.previousPosition).setY(0)
     if (upstream.lengthSq() === 0) upstream.set(lane.tx, 0, lane.tz)
     upstream.normalize().multiplyScalar(.72).add(start)

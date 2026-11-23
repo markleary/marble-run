@@ -19,11 +19,11 @@ To play from your home screen, choose **Install game** in race setup. On iPhone 
 | Midnight Orrery | Three swinging pendulums, an orbital underpass and two ramp jumps across open gaps | Celesta, bass clarinet and viola in a clockwork ostinato |
 | Tideglass Conservatory | A botanical glasshouse with a winding half-pipe and twin sea-glass sluices | Alto flute and nylon-string guitar in a bossa nova |
 | Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
-| Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, five banked hairpins and knockout gates | “Chalk & Gravity,” an original 128-second mallet, electric keys, bass and percussion score |
+| Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, bumper and blade slaloms, a double-apex turnaround and knockout gates | “Five Holds Left,” a 140 BPM breakbeat with picked bass and twin electric guitars |
 
 Each track has its own instrumental loop. The music sits underneath the rolling marbles, starting gate and finish bell. The speaker button mutes or restores the full mix.
 
-On Crux, choose **Knockout** to race for a spot behind each release bar. The last marble into the funnel is eliminated, and the qualifiers launch together into the next leg. Smaller fields start the cuts later so two finalists race to the stripe. Choose **Endurance** to keep the gates open and race the entire field to the finish. Open **Checkpoint leaders** on the results screen to see who led at each gate and when they crossed.
+On Crux, choose **Knockout** to race for a spot behind each release bar. Watch the white **ENTRY** stripe at the mouth of the funnel. The last marble across it is out. Once the qualifiers reach their pads, the last entrant rolls into the side pocket and the bar releases the qualifiers together. Smaller fields start the cuts later so two finalists race to the stripe. Choose **Endurance** to keep the gates open and race the entire field to the finish. Open **Checkpoint leaders** on the results screen to see who led at each gate and when they crossed.
 
 Choose **Race again** to keep the field and draw a fresh starting grid. The results show finish times, gaps, checkpoint eliminations and points. First place earns 3 points, second earns 2 and third earns 1. **Standings** keeps total points and wins across all tracks for each name and color in this browser. Earlier releases saved only the winner of each race, so each recorded win carries forward as 3 points.
 

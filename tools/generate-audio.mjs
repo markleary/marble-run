@@ -2,9 +2,11 @@ import { access, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderCruxScore } from './crux-score.mjs';
+import { cruxScoreTitle, renderCruxScore } from './crux-score.mjs';
 
 const directory = new URL('../public/audio/', import.meta.url);
+// Re-render the local composition when iterating on its arrangement.
+const cruxOnly = process.argv.includes('--crux');
 function elevenLabsKey() {
   if (!process.env.ELEVENLABS_API_KEY) throw new Error('Set ELEVENLABS_API_KEY in the local .env file.');
   return process.env.ELEVENLABS_API_KEY;
@@ -19,7 +21,7 @@ const clips = [
   ['bell', 1.7, false, 'Single light tap on a small brass counter bell at a tabletop marble race. A sweet clear high ding with a short natural decay.']
 ];
 await mkdir(directory, { recursive: true });
-for (const [name, duration, loop, prompt] of clips) {
+for (const [name, duration, loop, prompt] of cruxOnly ? [] : clips) {
   const file = new URL(name + '.mp3', directory);
   if (await access(file).then(() => true, () => false)) continue;
   const response = await fetch('https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_128', {
@@ -81,15 +83,16 @@ function chooseLoop(source, bpm, loopBars) {
 
 const cache = new URL('../node_modules/.cache/marble-run-audio/', import.meta.url);
 await mkdir(cache, { recursive: true });
-function masterLoop(id, inputArgs, output) {
+function masterLoop(id, inputArgs, output, title) {
   const meter = spawnSync('ffmpeg', ['-hide_banner', '-nostats', ...inputArgs, '-af', 'ebur128', '-f', 'null', '-'], { encoding: 'utf8' });
   const lufs = Number(meter.stderr?.match(/Integrated loudness:\s+I:\s+(-?[\d.]+) LUFS/)?.[1]);
   if (!Number.isFinite(lufs) || meter.status !== 0) throw new Error('Could not measure the ' + id + ' score.');
   execFileSync('ffmpeg', ['-v', 'error', ...inputArgs, '-af', 'volume=' + (-22 - lufs).toFixed(2) + 'dB',
-    '-ar', '44100', '-ac', '2', '-codec:a', 'libmp3lame', '-b:a', '128k', output]);
+    '-ar', '44100', '-ac', '2', '-codec:a', 'libmp3lame', '-b:a', '128k',
+    ...(title ? ['-metadata', 'title=' + title, '-metadata', 'album=Marble Run'] : []), output]);
 }
 
-for (const [id, bpm, brief, loopBars = 8] of scores) {
+for (const [id, bpm, brief, loopBars = 8] of cruxOnly ? [] : scores) {
   const output = new URL('music-' + id + '.mp3', directory);
   if (await access(output).then(() => true, () => false)) continue;
   const source = new URL(id + '-source.mp3', cache);
@@ -134,13 +137,13 @@ for (const [id, bpm, brief, loopBars = 8] of scores) {
 }
 
 const cruxScore = new URL('music-crux.mp3', directory);
-if (!await access(cruxScore).then(() => true, () => false)) {
+if (cruxOnly || !await access(cruxScore).then(() => true, () => false)) {
   const work = await mkdtemp(new URL('crux-', cache));
   try {
     const pcm = join(work, 'score.f32'), mastered = join(work, 'score.mp3');
-    await renderCruxScore(pcm);
-    masterLoop('crux', ['-f', 'f32le', '-ar', '44100', '-ac', '2', '-i', pcm], mastered);
+    const duration = await renderCruxScore(pcm);
+    masterLoop('crux', ['-f', 'f32le', '-ar', '44100', '-ac', '2', '-i', pcm], mastered, cruxScoreTitle);
     await rename(mastered, cruxScore);
-    console.log('Generated music-crux (128.00 s)');
+    console.log('Generated music-crux (' + duration.toFixed(2) + ' s)');
   } finally { await rm(work, { recursive: true, force: true }); }
 }

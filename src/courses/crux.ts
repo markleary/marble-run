@@ -1,6 +1,7 @@
 import { buildCourse, clamp, ease, launchTrim, type CourseTrack, type Profile } from '../courseGeometry'
 import layout from './crux-layout.json'
 import { cruxCheckpoints } from './cruxCheckpoints'
+import { cruxObstacleBoards, cruxObstacleMesh, cruxObstacles } from './cruxObstacles'
 
 const { halfWidth, sections, jumps } = layout
 const stations = cruxCheckpoints(sections)
@@ -49,17 +50,31 @@ function jumpElevation(s: number) {
 }
 
 function cruxProfile(): Profile {
-  const bends = [2, 4, 6, 8, 10].map((i, index) => ({ ...sections[i], side: index % 2 ? -1 : 1 }))
+  const bends = [2, 4, 6, 8, 10].map((i, index) => ({
+    ...sections[i], side: index % 2 ? -1 : 1,
+    // Start flattening these exits early to spread the pack across the obstacle board.
+    rollOff: i === 4 ? 3.5 : i === 8 ? 4.5 : 0,
+  }))
   const grade = .057
   const bank = 1.00
   const bankDrop = 1.45
   const apronDrop = 4.2
-  const top = 3 + stations.length * apronDrop + grade * runout.end + 3.4 - jumpElevation(runout.end) + 2 * bankDrop * bends.length
+  const slalomDrop = 5.8, crossGalleryDrop = 2.2
+  const top = 3 + stations.length * apronDrop + grade * runout.end + 3.4 - jumpElevation(runout.end)
+    + 2 * bankDrop * bends.length + (slalomDrop + crossGalleryDrop)
   return {
     roundedLaneDepth: .12,
     collisionResolution: { rowSpacing: .56, bandsPerLane: 6 },
     divider: s => 1 - ease(8, gate.end, s),
-    wallHeight: () => 2.15,
+    wallHeight: s => {
+      for (const board of cruxObstacleBoards) {
+        if (s >= board.start - 3 && s < board.end + 15) {
+          const extension = board.id === 'return' ? 4.55 : 2.65
+          return 2.15 + extension * (ease(board.start - 3, board.start, s) - ease(board.end + 10, board.end + 15, s))
+        }
+      }
+      return 2.15
+    },
     spans: cruxDeckSpans,
     deflectors: [],
     height(s, lateral) {
@@ -67,12 +82,24 @@ function cruxProfile(): Profile {
       for (const bend of bends) {
         if (s < bend.start - 5) break
         const enter = ease(bend.start - 5, bend.start + 23, s)
-        const leave = ease(bend.end - 23, bend.end + 5, s)
+        const leave = ease(bend.end - 23 - bend.rollOff, bend.end + 5 - bend.rollOff, s)
         const blend = enter - leave
         cant -= bend.side * bank * blend
         bowl += blend
         bendDrop += bankDrop * (enter + leave)
       }
+      // Roll the banking through each direction change of the blade gallery.
+      const slalom = layout.slalom, local = s - slalom.start
+      const boardDrop = slalomDrop * ease(-5, 4 * slalom.arc + 5, local)
+        + crossGalleryDrop * ease(layout.hook.linkStart - 19, layout.hook.linkEnd + 19, s)
+      if (local > -3 && local < 4 * slalom.arc + 3) {
+        const transition = (distance: number) => ease(distance - 3, distance + 3, local)
+        cant += .035 * (transition(0) - 2 * transition(slalom.arc)
+          + 2 * transition(3 * slalom.arc) - transition(4 * slalom.arc))
+      }
+      // Flatten the short cross-gallery between the two distinctly banked apexes.
+      cant += .48 * (ease(layout.hook.linkStart - 20, layout.hook.linkStart + 5, s)
+        - ease(layout.hook.linkEnd - 5, layout.hook.linkEnd + 20, s))
       // A broad, banked running surface supplies the turning force. The
       // outer shoulder curls progressively upward before the safety rail.
       const across = lateral / halfWidth
@@ -84,7 +111,7 @@ function cruxProfile(): Profile {
       // the seats. Released marbles accelerate immediately under gravity.
       let apron = 0
       for (const station of stations) apron += apronDrop * ease(station.s - 5, station.s + 23, s)
-      return top - grade * s - launchDrop - bendDrop - apron + jumpElevation(s) + cant * lateral + shoulder + launch
+      return top - grade * s - launchDrop - bendDrop - boardDrop - apron + jumpElevation(s) + cant * lateral + shoulder + launch
     },
   }
 }
@@ -96,5 +123,6 @@ export function buildCruxTrack() {
     track.collisions.push({ surface: 'lacquer', vertices: new Float32Array(vertices),
       indices: new Uint32Array([0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6]) })
   }
+  for (const obstacle of cruxObstacles) track.collisions.push(cruxObstacleMesh(track, obstacle))
   return track
 }

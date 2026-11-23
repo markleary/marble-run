@@ -250,7 +250,10 @@ export class RaceSimulation {
     const checkpoint = this.checkpoints[marble.id];
     // Waiting behind a closed start bar is intentional. Reset the progress
     // watchdog there so the fresh start has the same grace period as the grid.
-    if (marble.stagingAt !== undefined) checkpoint.time = this.elapsed;
+    if (marble.stagingAt !== undefined
+        && this.competition?.gates.find(gate => gate.number === marble.stagingAt)?.seated.includes(marble.id)) {
+      checkpoint.time = this.elapsed;
+    }
     if (nearest.s > checkpoint.distance + 0.2) {
       checkpoint.distance = nearest.s;
       checkpoint.time = this.elapsed;

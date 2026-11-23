@@ -9,23 +9,27 @@ export interface RaceCheckpoint {
   name: string
   s: number
   line: TrackSample
+  entryS: number
+  entryLine: TrackSample
   cut: boolean
   field: number
   arrivals: Crossing[]
   phase: 'bypass' | 'ready' | 'loading' | 'released'
   seated: number[]
+  divertedAt: number | null
+  pocketAt: number | null
   releasedAt: number | null
 }
 
 export function createCruxCompetition(track: CourseTrack, count: number, format: CruxFormat) {
   let field = count
-  const timingLines = cruxCheckpoints(track.sections).filter(gate => gate.s > track.startS)
-  const gates: RaceCheckpoint[] = timingLines.map(({ number, name, s }, index): RaceCheckpoint => {
+  const timingLines = cruxCheckpoints(track.sections).filter(gate => gate.entryS > track.startS)
+  const gates: RaceCheckpoint[] = timingLines.map(({ number, name, s, entryS }, index): RaceCheckpoint => {
     // Put the cuts at the later gates in a smaller field. The last two always race to the stripe.
     const cut = format === 'knockout' && field > 2 && timingLines.length - index <= field - 2
     const gate: RaceCheckpoint = {
-      number, name, s, line: track.sample(s), cut, field, arrivals: [],
-      phase: cut ? 'ready' : 'bypass', seated: [], releasedAt: null,
+      number, name, s, line: track.sample(s), entryS, entryLine: track.sample(entryS), cut, field, arrivals: [],
+      phase: cut ? 'ready' : 'bypass', seated: [], divertedAt: null, pocketAt: null, releasedAt: null,
     }
     if (cut) field--
     return gate
@@ -37,8 +41,8 @@ export function createCruxCompetition(track: CourseTrack, count: number, format:
     crossings.length = 0
     for (const marble of marbles) {
       const gate = gates[nextGate[marble.id]]
-      if (!gate || marble.cutAt || marble.stagingAt || Math.abs(marble.distance - gate.s) > 2 * track.radius) continue
-      const time = crossingTime(marble, gate.line, track.radius, elapsed, dt)
+      if (!gate || marble.cutAt || marble.stagingAt || Math.abs(marble.distance - gate.entryS) > 2 * track.radius) continue
+      const time = crossingTime(marble, gate.entryLine, track.radius, elapsed, dt)
       if (time === null) continue
       nextGate[marble.id]++
       crossings.push({ gate, id: marble.id, time })
@@ -50,13 +54,22 @@ export function createCruxCompetition(track: CourseTrack, count: number, format:
       gate.arrivals.push({ id, time })
       if (!gate.cut) continue
       gate.phase = 'loading'
-      if (slot === gate.field - 1) {
-        marbles[id].cutAt = gate.number
-        withdraw(id)
-      } else {
+      if (slot < gate.field - 1) {
         marbles[id].stagingAt = gate.number
         marbles[id].rackSlot = slot
       }
+    }
+    // A pass on the brake rollers can change arrival at the fork, but every
+    // qualifying place already belongs to the racer that earned it at entry.
+    for (const gate of gates) {
+      if (gate.phase !== 'loading' || gate.arrivals.length !== gate.field) continue
+      const last = marbles[gate.arrivals[gate.field - 1].id]
+      if (last.cutAt || Math.abs(last.distance - gate.s) > 2 * track.radius) continue
+      const time = crossingTime(last, gate.line, track.radius, elapsed, dt)
+      if (time === null) continue
+      gate.divertedAt = time
+      last.cutAt = gate.number
+      withdraw(last.id)
     }
   }
   return { gates, step }

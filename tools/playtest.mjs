@@ -196,7 +196,7 @@ try {
     const start = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...args) {
       start.apply(this, args);
-      if (this.loop && this.buffer?.duration > 10) window.playtestMusicStarted = true;
+      if (this.loop && this.buffer?.duration > 10) window.playtestMusicSeconds = this.buffer.duration;
     };
   });
   // Keep the fixed physics steps. Fast runs take several per frame, and a
@@ -426,7 +426,7 @@ try {
     await assertSetup(6);
     await page.evaluate(() => window.scrollTo(0, 0));
     await capture(id + '-setup');
-    await page.evaluate(() => { window.playtestMusicStarted = false; });
+    await page.evaluate(() => { window.playtestMusicSeconds = 0; });
     if (id in seeds) {
       // Apply the rehearsed grid once. The rematch still draws a random grid.
       await page.evaluate(seed => {
@@ -454,7 +454,9 @@ try {
     }
     await assertRacers('.running-order', entrants);
     assert.ok(loadedMusic.has(id), title + ' must load its own soundtrack.');
-    assert.ok(await page.evaluate(() => window.playtestMusicStarted), title + ' must play a decoded music loop.');
+    const musicSeconds = await page.evaluate(() => window.playtestMusicSeconds);
+    assert.ok(musicSeconds > 10, title + ' must play a decoded music loop.');
+    if (id === 'crux') assert.ok(Math.abs(musicSeconds - 178.29) < .1, 'Crux must play “Five Holds Left”.');
     await verifyResults(title, 6, 5);
     if (id === 'crux') {
       assert.deepEqual(await page.locator('.finish-time').allTextContents().then(times => times.slice(2)),

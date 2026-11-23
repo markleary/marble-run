@@ -276,7 +276,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
       const cutCount = config.count - 2;
       const rule = config.format === 'endurance' ? 'Gates stay open. All marbles race to the finish.'
         : cutCount === 0 ? 'Two finalists race straight to the finish.'
-        : (cutCount === 1 ? 'One cut at CP 4.' : 'Cuts at CP ' + (5 - cutCount) + '–4.') + ' Last in is out. Qualifiers restart together.';
+        : (cutCount === 1 ? 'One cut at CP 4.' : 'Cuts at CP ' + (5 - cutCount) + '–4.') + ' Last across the ENTRY stripe is out. Qualifiers restart together.';
       format.querySelector('p')!.textContent = rule;
     }
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
