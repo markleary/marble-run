@@ -210,7 +210,7 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       const seated = gate?.seated.length ?? 0
       machine.visible = count > 0; bypass.visible = count === 0
       rebuildSeats(count)
-      reject.switchBlade.visible = gate?.divertedAt != null
+      reject.jetLights.visible = gate?.divertedAt != null && seconds >= gate.divertedAt && !released
       // Retract the gate into the bed, leaving the line visible as the pack launches.
       const progress = releasedAt === null ? 0 : THREE.MathUtils.smoothstep(seconds - releasedAt, 0, .24)
       bar.position.y = -.93 * progress
@@ -228,10 +228,11 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
     updateStations(gates: readonly RaceCheckpoint[] | undefined, seconds: number) {
       for (const station of stations) station.update(gates?.find(g => g.number === station.number), seconds)
     },
-    showCutMarble(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number) {
+    showCutMarble(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number,
+      field: readonly MarbleState[], alpha: number) {
       const last = gate.arrivals[gate.field - 1]
       if (last?.id !== marble.id || gate.divertedAt === null) return false
-      stations[gate.number - 1].roll(mesh, marble, seconds, gate.divertedAt, gate.pocketAt)
+      stations[gate.number - 1].roll(mesh, marble, seconds, gate.divertedAt, gate.pocketAt, field, alpha)
       return true
     },
   }

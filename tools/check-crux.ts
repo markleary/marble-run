@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { Group, MeshStandardMaterial, Object3D, Vector3 } from 'three'
+import { createCruxRejectChute } from '../src/cruxRejectChute'
 import { compareRacePosition } from '../src/raceTiming'
-import { cruxRack, cruxRackSlot } from '../src/courses/cruxCheckpoints'
+import { cruxCheckpoints, cruxRack, cruxRackSlot } from '../src/courses/cruxCheckpoints'
 import { FIXED_DT, RaceSimulation } from '../src/simulation'
 import type { CourseTrack } from '../src/track'
 
@@ -112,8 +114,33 @@ function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
   }
 }
 
+/** Reproduce the displayed cut pose against interpolated qualifying bodies without a GPU. */
+function checkChuteClearance(track: CourseTrack) {
+  const material = new MeshStandardMaterial()
+  const fixtures = cruxCheckpoints(track.sections).map(({ s }) =>
+    createCruxRejectChute(track, s, new Group(), { rubber: material, stripe: material, chrome: material, label: material }))
+  const cut = new Object3D(), qualifier = new Vector3()
+  return (race: RaceSimulation) => {
+    for (const gate of race.competition!.gates) {
+      if (gate.divertedAt === null || gate.releasedAt !== null && race.elapsed > gate.releasedAt + .3) continue
+      const last = race.marbles[gate.arrivals[gate.field - 1].id]
+      for (const alpha of [.5, 1]) {
+        const time = race.elapsed - (1 - alpha) * FIXED_DT
+        fixtures[gate.number - 1].roll(cut, last, time, gate.divertedAt, gate.pocketAt, race.marbles, alpha)
+        for (let i = 0; i < gate.field - 1; i++) {
+          const marble = race.marbles[gate.arrivals[i].id]
+          qualifier.lerpVectors(marble.previousPosition, marble.position, alpha)
+          assert.ok(cut.position.distanceTo(qualifier) >= 2 * track.radius - .004,
+            `Cut marble passed through a qualifier at CP ${gate.number}, seed ${race.seed}, time ${time}.`)
+        }
+      }
+    }
+  }
+}
+
 export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repetitions: number) {
   checkPhotoCut(track)
+  const checkChute = checkChuteClearance(track)
   // These two six-wide approaches previously carried a racer over CP1's outer rail.
   for (const seed of [295, 375]) {
     const race = new RaceSimulation(track, 6, seed, 'knockout')
@@ -140,6 +167,7 @@ export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repeti
         while (!race.finished && !race.failure) {
           race.step()
           entrances.observe()
+          checkChute(race)
           if (seed === firstSeed) checkLoadingRacks(track, race)
         }
         assert.ok(race.finished, `Crux knockout with ${count} racers, seed ${seed}: ${race.failure}`)

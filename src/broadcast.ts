@@ -412,7 +412,7 @@ export class RaceBroadcast {
       const mesh = this.balls[marble.id];
       if (marble.cutAt !== undefined) {
         const gate = gates?.find(g => g.number === marble.cutAt);
-        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime);
+        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime, marbles, alpha);
         continue;
       }
       mesh.visible = true;
