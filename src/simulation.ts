@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import type { CourseTrack, CourseSurface } from './track';
 import { spectralFields, spectralOffset, spectralPolarity } from './courses/spectral';
 import { attachOrreryDrive } from './orreryDrive';
+import { attachAfterglowDrive } from './afterglowDrive';
 import { attachCruxRacks } from './cruxRackDrive';
 import { cruxCheckpoints, type CruxFormat } from './courses/cruxCheckpoints';
 import { spectralCheckpoints } from './courses/spectralCheckpoints';
@@ -115,6 +116,7 @@ export class RaceSimulation {
       this.world.createCollider(collider);
     }
     if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
+    if (track.id === 'afterglow') this.advanceDrive = attachAfterglowDrive(this.world, track, seed);
     this.finishLine = track.sample(track.finishS);
     if (track.id === 'crux') this.competition = createCheckpointRace(track, entrantCount, cruxCheckpoints(track.sections), format);
     if (track.id === 'spectral') {

@@ -8,7 +8,7 @@ Use the fullscreen button in the top-right corner to expand the game or return t
 
 On a phone, rotate between portrait and landscape at any point. Tap the chevron beside the race clock to expand the full running order. Switching apps pauses the race and audio until you return.
 
-To play from your home screen, choose **Install game** in race setup. On iPhone or iPad, use Safari’s **Share → Add to Home Screen** and enable **Open as Web App** if shown. On Android, follow Chrome’s install prompt or choose the install option in its menu. After the first online launch finishes downloading the game, all nine tracks and their soundtracks work offline.
+To play from your home screen, choose **Install game** in race setup. On iPhone or iPad, use Safari’s **Share → Add to Home Screen** and enable **Open as Web App** if shown. On Android, follow Chrome’s install prompt or choose the install option in its menu. After the first online launch finishes downloading the game, all ten tracks and their soundtracks work offline.
 
 | Track | Race highlights | Soundtrack |
 | --- | --- | --- |
@@ -21,6 +21,7 @@ To play from your home screen, choose **Install game** in race setup. On iPhone 
 | Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
 | Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, bumper and blade slaloms, a double-apex turnaround and knockout gates | “Contour Line,” melodic electronic house with a rolling bass line and a rising synth hook |
 | Spectral Relay | A vertical drop into a neon arena, two magnetic galleries and five timed checkpoints | “Chromatic Slipstream,” an ElevenLabs electro-breaks instrumental with a descending glass-synth hook |
+| Afterglow FM | A continuous neon ribbon with sliding crossfader pucks, a 270° bank and a narrow bridge beneath the upper deck | “Dial Tone at Midnight,” a late-night electro instrumental with a two-note FM synth hook |
 
 Each track has its own instrumental loop. The music sits underneath the rolling marbles, starting gate and finish bell. The speaker button mutes or restores the full mix.
 

@@ -13,6 +13,7 @@ import { createCruxScenery } from './cruxScenery'
 import { createTideglassScenery } from './tideglassScenery'
 import { createKeplerScenery } from './keplerScenery'
 import { createSpectralScenery } from './spectralScenery'
+import { createAfterglowScenery } from './afterglowScenery'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
@@ -20,6 +21,7 @@ const scenery = {
   prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery,
   wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery,
   kepler: createKeplerScenery, crux: createCruxScenery, spectral: createSpectralScenery,
+  afterglow: createAfterglowScenery,
 }
 
 export type CourseScenery = THREE.Group & {

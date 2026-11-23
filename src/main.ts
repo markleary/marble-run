@@ -121,6 +121,7 @@ async function boot() {
     heat?.dispose(); sound.stopRolling();
     entrants = field;
     heat = new RaceSimulation(track, entrants.length, crypto.getRandomValues(new Uint32Array(1))[0], format);
+    broadcast!.setHeatSeed(heat.seed);
     sound.startMusic(track.id);
     broadcast!.entrants(entrants);
     countdownRemaining = 3; accumulator = 0; lastFinishCount = 0; lastGateReleases = 0; lastHUD = -1;

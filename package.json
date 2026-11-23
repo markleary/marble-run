@@ -9,7 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test:physics": "node --import tsx tools/soak.ts",
     "test:browser": "node tools/playtest.mjs",
-    "track:generate": "node tools/generate-prism.mjs && node tools/generate-frostline.mjs && node tools/generate-timber.mjs && node tools/generate-wireworks.mjs && node tools/generate-orrery.mjs && node tools/generate-tideglass.mjs && node tools/generate-kepler.mjs && node tools/generate-crux.mjs && node tools/generate-spectral.mjs",
+    "track:generate": "node tools/generate-prism.mjs && node tools/generate-frostline.mjs && node tools/generate-timber.mjs && node tools/generate-wireworks.mjs && node tools/generate-orrery.mjs && node tools/generate-tideglass.mjs && node tools/generate-kepler.mjs && node tools/generate-crux.mjs && node tools/generate-spectral.mjs && node tools/generate-afterglow.mjs",
     "audio:generate": "node --env-file-if-exists=.env tools/generate-audio.mjs"
   },
   "dependencies": {

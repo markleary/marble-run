@@ -35,8 +35,12 @@ export const courses = {
     title: 'Crux Mountain Masters',
     features: ['2+ min', 'Gap jumps', 'Blade slalom', 'Knockout gates'],
   },
+  afterglow: {
+    title: 'Afterglow FM',
+    features: ['60–90 sec', 'Crossfader pucks', 'Carrier spiral', 'Mono bridge'],
+  },
 } as const;
 
 export type CourseId = keyof typeof courses;
-export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral'];
+export const courseIds: readonly CourseId[] = ['prism', 'frostline', 'timber', 'wireworks', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral', 'afterglow'];
 export const fieldSizes = [2, 3, 4, 5, 6];
