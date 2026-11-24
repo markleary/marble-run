@@ -14,6 +14,8 @@ import { createTideglassScenery } from './tideglassScenery'
 import { createKeplerScenery } from './keplerScenery'
 import { createSpectralScenery } from './spectralScenery'
 import { createAfterglowScenery } from './afterglowScenery'
+import { hasCheckpoints } from './courses/checkpoints'
+import { createCheckpointStations } from './checkpointStations'
 
 const LANES = ['#e21e46', '#ff8900', '#f4c61d', '#19a76d', '#096aca', '#743ab6']
 
@@ -33,7 +35,17 @@ export type CourseScenery = THREE.Group & {
 }
 
 export function createCourseScenery(track: CourseTrack, onReady?: () => void): CourseScenery {
-  return scenery[track.id](track, onReady)
+  const group: CourseScenery = scenery[track.id](track, onReady)
+  if (hasCheckpoints(track.id)) {
+    const stations = createCheckpointStations(track, group)
+    const updateCourse = group.updateStations
+    group.showCutMarble = stations.showCutMarble
+    group.updateStations = (gates, seconds) => {
+      stations.updateStations(gates, seconds)
+      updateCourse?.(gates, seconds)
+    }
+  }
+  return group
 }
 
 function createPrismScenery(track: CourseTrack): THREE.Group {

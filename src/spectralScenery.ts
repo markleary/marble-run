@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { spectralFields, spectralLaunch, spectralOffset, spectralPolarity } from './courses/spectral'
-import { spectralCheckpoints, spectralGateColors } from './courses/spectralCheckpoints'
+import { checkpointStations } from './courses/checkpoints'
+import { checkpointRack } from './courses/checkpointRack'
+import { spectralDial, spectralGateColors } from './courses/spectralCheckpoints'
 import type { RaceCheckpoint } from './checkpointRace'
 import type { CourseTrack } from './track'
 import { SceneryBatch, axisY, canvasTexture, material, type Material } from './sceneryKit'
@@ -209,25 +211,22 @@ export function createSpectralScenery(track: CourseTrack) {
     batch.rod(hull, shoulder, socket, .22)
     batch.rod(white, socket, crown, .14)
   }
-  const gates = spectralCheckpoints(track.sections)
+  const gates = checkpointStations(track.id, track.sections)
   const lamps: Material[] = []
-  for (const [i, gate] of gates.entries()) {
-    const p = track.sample(gate.s), accent = spectralGateColors[i]
+  for (const [i, { entryS }] of gates.entries()) {
+    const p = track.sample(entryS), accent = spectralGateColors[i]
     const lamp = glow(accent, .65)
     lamps.push(lamp)
-    ribbon(lamp, gate.s - .032, gate.s + .032, -w, w, .031, 16)
+    ribbon(lamp, entryS - .055, entryS, -w, w, .051, 16)
     for (const side of [-1, 1]) {
-      const foot = at(gate.s, side * (w + .19), -.33), cap = foot.clone().addScaledVector(axisY, 2.7)
-      const socket = cap.clone().addScaledVector(axisY, -.99)
-      batch.rod(hull, foot, socket, .19, 8)
-      batch.rod(lamp, socket, cap, .145, 8)
       for (let bar = 0; bar < 4; bar++) {
-        const distance = gate.s - 2.7 + .53 * bar
+        const distance = entryS - 2.7 + .53 * bar
         ribbon(lamp, distance, distance + .16, side * (w - .26), side * (w - .53 - bar * .18), .027)
       }
     }
     // The timing display stands on the far shoulder of the approaching camera.
-    const hub = at(gate.s, -w - .64, 3.4), foot = at(gate.s, -w - .64, -.46)
+    const lateral = -w - spectralDial.shoulderOffset
+    const hub = at(entryS, lateral, spectralDial.height), foot = at(entryS, lateral, -.46)
     batch.rod(nickel, foot, hub.clone().addScaledVector(axisY, -1.39), .16, 8)
     const normal = new THREE.Vector3(-.73 * p.tx + .68 * p.rx, 0, -.73 * p.tz + .68 * p.rz).normalize()
     const face = new THREE.Mesh(new THREE.CircleGeometry(1.42, 64), timingDial(String(i + 1).padStart(2, '0'), accent))
@@ -260,6 +259,9 @@ export function createSpectralScenery(track: CourseTrack) {
   const coils: { s: number; side: number; field: typeof spectralFields[number]; matrix: THREE.Matrix4 }[] = []
   for (const field of spectralFields) {
     for (let s = field.start + .8; s < field.end - .5; s += 3.9) {
+      // The timing eyes, sign legs and reject-chute brackets use the same shoulder.
+      if (gates.some(gate => Math.abs(s - gate.entryS) < 1.2
+        || (s > gate.s - 1 && s < gate.s + checkpointRack.barOffset + 1))) continue
       const p = track.sample(s), yaw = -Math.atan2(p.tz, p.tx)
       for (const side of [-1, 1]) {
         const l = side * (w + .31)
@@ -282,10 +284,11 @@ export function createSpectralScenery(track: CourseTrack) {
     if (object instanceof THREE.Mesh && object.material === shield) object.castShadow = false
   }
   const warm = new THREE.Color('#ff5790'), cool = new THREE.Color('#41d9ff'), current = new THREE.Color()
+  let activeGates: readonly RaceCheckpoint[] | undefined
   const setRaceTime = (seconds: number) => {
     turnRotor(seconds)
     for (const [i, { s, side, field }] of coils.entries()) {
-      const strength = .10 + .90 * Math.max(0, spectralPolarity(field, s, seconds) * side)
+      const strength = .10 + .90 * Math.max(0, spectralPolarity(field, s, seconds, activeGates) * side)
       fieldLights.setColorAt(i, current.copy(side > 0 ? warm : cool).multiplyScalar(strength))
     }
     if (fieldLights.instanceColor) fieldLights.instanceColor.needsUpdate = true
@@ -294,6 +297,7 @@ export function createSpectralScenery(track: CourseTrack) {
   return Object.assign(group, {
     setRaceTime,
     updateStations(states: readonly RaceCheckpoint[] | undefined, seconds: number) {
+      activeGates = states
       for (const [i, lamp] of lamps.entries()) {
         const time = states?.[i]?.arrivals.at(-1)?.time
         lamp.emissiveIntensity = time == null ? .65 : .85 + 2.4 * Math.exp(-4 * Math.max(0, seconds - time))

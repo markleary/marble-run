@@ -3,10 +3,9 @@ import type { CourseTrack, CourseSurface } from './track';
 import { spectralFields, spectralOffset, spectralPolarity } from './courses/spectral';
 import { attachOrreryDrive } from './orreryDrive';
 import { attachAfterglowDrive } from './afterglowDrive';
-import { attachCruxRacks } from './cruxRackDrive';
-import { cruxCheckpoints, type CruxFormat } from './courses/cruxCheckpoints';
-import { spectralCheckpoints } from './courses/spectralCheckpoints';
-import { createCheckpointRace } from './checkpointRace';
+import { attachCheckpointRacks } from './checkpointRackDrive';
+import { checkpointStations } from './courses/checkpoints';
+import { createCheckpointRace, type CheckpointFormat } from './checkpointRace';
 import { crossingTime } from './raceTiming';
 
 export const FIXED_DT = 1 / 60;
@@ -81,14 +80,14 @@ export class RaceSimulation {
   private readonly finishLine: ReturnType<CourseTrack['sample']>;
   private readonly impacts: Impact[] = [];
   private readonly advanceDrive?: (seconds: number) => void;
-  private readonly driveRacks?: ReturnType<typeof attachCruxRacks>;
+  private readonly driveRacks?: ReturnType<typeof attachCheckpointRacks>;
   readonly competition?: ReturnType<typeof createCheckpointRace>;
   private tick = 0;
   private racing = false;
   private disposed = false;
   private fastOpening = false;
 
-  constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number, format: CruxFormat = 'endurance') {
+  constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number, format: CheckpointFormat = 'endurance') {
     if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > track.laneCount) {
       throw new RangeError('A race requires between 2 and ' + track.laneCount + ' marbles.');
     }
@@ -118,9 +117,9 @@ export class RaceSimulation {
     if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
     if (track.id === 'afterglow') this.advanceDrive = attachAfterglowDrive(this.world, track, seed);
     this.finishLine = track.sample(track.finishS);
-    if (track.id === 'crux') this.competition = createCheckpointRace(track, entrantCount, cruxCheckpoints(track.sections), format);
+    const stations = checkpointStations(track.id, track.sections);
+    if (stations.length) this.competition = createCheckpointRace(track, entrantCount, stations, format);
     if (track.id === 'spectral') {
-      this.competition = createCheckpointRace(track, entrantCount, spectralCheckpoints(track.sections));
       this.fastOpening = track.startS < track.sections[1].end;
       // Resume travel after an impact with the curved receiver within the same
       // fixed tick. A single CCD substep discards the remaining motion at contact.
@@ -156,7 +155,7 @@ export class RaceSimulation {
       };
     });
     if (this.competition?.gates.some(gate => gate.cut)) {
-      this.driveRacks = attachCruxRacks(this.world, track, this.competition.gates, this.bodies);
+      this.driveRacks = attachCheckpointRacks(this.world, track, this.competition.gates, this.bodies);
     }
   }
 
@@ -214,10 +213,12 @@ export class RaceSimulation {
 
   private pulseFields() {
     for (const marble of this.marbles) {
+      if (marble.cutAt !== undefined) continue;
       const field = spectralFields.find(f => marble.distance >= f.start && marble.distance <= f.end);
       if (!field) continue;
+      const impulse = 4.2 * spectralPolarity(field, marble.distance, this.elapsed, this.competition?.gates) * FIXED_DT;
+      if (impulse === 0) continue;
       const { rx, rz } = this.track.sample(marble.distance);
-      const impulse = 4.2 * spectralPolarity(field, marble.distance, this.elapsed) * FIXED_DT;
       this.bodies[marble.id].applyImpulse({ x: rx * impulse, y: 0, z: rz * impulse }, true);
     }
   }
@@ -292,7 +293,7 @@ export class RaceSimulation {
     if (Math.abs(nearest.lateral) > track.halfWidth + track.radius * 2
         || p.y < track.sample(nearest.s, nearest.lateral).y - 2 * track.radius) {
       this.failure = 'A marble left the course.';
-    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > (track.id === 'crux' || track.id === 'spectral' ? LONG_HEAT_SECONDS : MAX_HEAT_SECONDS)) {
+    } else if (this.elapsed - checkpoint.time > STALL_SECONDS || this.elapsed > (this.competition ? LONG_HEAT_SECONDS : MAX_HEAT_SECONDS)) {
       this.failure = 'A marble stopped before the finish.';
     }
   }

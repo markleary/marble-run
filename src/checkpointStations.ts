@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
-import { cruxCheckpoints, cruxFunnelRails, cruxFunnelTubes, cruxRack, cruxRackSlot } from './courses/cruxCheckpoints'
-import { createCruxRejectChute } from './cruxRejectChute'
+import { checkpointStations } from './courses/checkpoints'
+import { checkpointFunnelRails, checkpointFunnelTubes, checkpointRack, checkpointRackSlot } from './courses/checkpointRack'
+import { spectralGateColors } from './courses/spectralCheckpoints'
+import { createCheckpointRejectChute } from './checkpointRejectChute'
 import type { MarbleState } from './simulation'
 import type { RaceCheckpoint } from './checkpointRace'
 import type { CourseTrack } from './track'
@@ -31,7 +33,7 @@ function stationFace(ctx: CanvasRenderingContext2D, name: string, accent: string
 
 /** The runner supplies the actual marble poses. Only the machine and its sign
  * animate here, using the same timing line, seats and bar as the simulation. */
-export function createCruxStations(track: CourseTrack, group: THREE.Group) {
+export function createCheckpointStations(track: CourseTrack, group: THREE.Group) {
   const graphite = material('#20292d', .48, .31), rubber = material('#293034', .87)
   const steel = material('#aeb9b7', .32, .54), chrome = material('#d5deda', .18, .78)
   const white = material(cream, .54), red = material('#e65336', .48)
@@ -52,8 +54,9 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
     ctx.fillText('OUT', 128, 42)
   })
 
-  const stations = cruxCheckpoints(track.sections).map(({s, entryS, number}) => {
-    const accent = stationColors[number - 1], paint = material(accent, .49, .16)
+  const colors = track.id === 'spectral' ? spectralGateColors : stationColors
+  const stations = checkpointStations(track.id, track.sections).map(({s, entryS, number}) => {
+    const accent = colors[(number - 1) % colors.length], paint = material(accent, .49, .16)
     const at = (ds: number, lateral: number, up = 0) => lifted(track.sample(s + ds, lateral), up)
     const metalwork = new SceneryBatch(), pass = new SceneryBatch()
     const machine = new THREE.Group(), bypass = new THREE.Group()
@@ -82,15 +85,15 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       transform.setPosition(signAt.clone().addScaledVector(normal, side * .124))
       frame.add(face, new THREE.PlaneGeometry(boardWidth, boardHeight), transform)
     }
-    const end = cruxRack.launchEnd
-    const rails = cruxFunnelRails(width)
+    const end = checkpointRack.launchEnd
+    const rails = checkpointFunnelRails(width)
     const innerEdge = (offset: number) => {
       const rail = rails.find(({start, end}) => start.lateral > 0 && start.s <= offset && end.s >= offset)
-      if (!rail) return cruxRack.throatHalfWidth
+      if (!rail) return checkpointRack.throatHalfWidth
       const u = (offset - rail.start.s) / (rail.end.s - rail.start.s)
-      return THREE.MathUtils.lerp(rail.start.lateral, rail.end.lateral, u) - cruxRack.railHeight / 2
+      return THREE.MathUtils.lerp(rail.start.lateral, rail.end.lateral, u) - checkpointRack.railHeight / 2
     }
-    plate(frame, rubber, -cruxRack.funnelLength, end, -width + .12, width - .12, .027)
+    plate(frame, rubber, -checkpointRack.funnelLength, end, -width + .12, width - .12, .027)
     const entry = entryS - s
     // The leading edge of the white band is the scored line, before any brake ribs.
     plate(frame, white, entry, entry + .23, -width + .1, width - .1, .044)
@@ -106,19 +109,19 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
         frame.add(entryLabel, new THREE.PlaneGeometry(1.33, .41), transform)
       }
     }
-    plate(metalwork, graphite, cruxRack.seatOffset - .76, cruxRack.barOffset + .39, -width + .15, width - .15, .046)
+    plate(metalwork, graphite, checkpointRack.seatOffset - .76, checkpointRack.barOffset + .39, -width + .15, width - .15, .046)
     for (let block = 0; block < 22; block++) {
       const l = -width + .17 + (2 * width - .34) * block / 22
-      plate(metalwork, block % 2 ? white : red, cruxRack.barOffset + .29, cruxRack.barOffset + .58,
+      plate(metalwork, block % 2 ? white : red, checkpointRack.barOffset + .29, checkpointRack.barOffset + .58,
         l, l + (2 * width - .34) / 22, .049)
     }
     // Low-profile brake ribs follow the converging width and end at the fork.
-    for (let d = -cruxRack.funnelLength + .70; d < -.45; d += .88) {
+    for (let d = -checkpointRack.funnelLength + .70; d < -.45; d += .88) {
       const half = innerEdge(d) - .14
       plate(metalwork, graphite, d, d + .105, -half, half, .048)
       plate(metalwork, steel, d, d + .025, -half, half, .050)
     }
-    for (const tube of cruxFunnelTubes(track, s, number)) {
+    for (const tube of checkpointFunnelTubes(track, s, number)) {
       const a = new THREE.Vector3().copy(tube.start), b = new THREE.Vector3().copy(tube.end)
       const direction = b.clone().sub(a)
       const shape = new THREE.CapsuleGeometry(tube.radius, direction.length(), 3, 12)
@@ -128,33 +131,33 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       if (tube.upper) {
         metalwork.rod(graphite, b.clone().addScaledVector(worldUp, -.71), b, .075, 8)
       } else {
-        metalwork.rod(steel, a.clone().addScaledVector(worldUp, cruxRack.railHeight * .43),
-          b.clone().addScaledVector(worldUp, cruxRack.railHeight * .43), .045, 6)
+        metalwork.rod(steel, a.clone().addScaledVector(worldUp, checkpointRack.railHeight * .43),
+          b.clone().addScaledVector(worldUp, checkpointRack.railHeight * .43), .045, 6)
       }
     }
     // Fixed straight-through seams remain visible when the capture guides are parked.
     for (const side of [-1, 1]) {
       const l = side * (width - .48)
-      plate(pass, idle, -cruxRack.funnelLength + .3, end, l - .05, l + .05, .045)
+      plate(pass, idle, -checkpointRack.funnelLength + .3, end, l - .05, l + .05, .045)
       for (let j = 0; j < 3; j++) {
-        const d = -cruxRack.funnelLength + 1 + j * 1.15
+        const d = -checkpointRack.funnelLength + 1 + j * 1.15
         metalwork.surface(white, d, d + .65, (ds, t) => {
           const u = (ds - d) / .65
           const edge = innerEdge(ds)
           return at(ds, side * (edge + .20 + .42 * u + t * .16), .048)
         }, .16)
       }
-      const axle = at(cruxRack.barOffset, l, .25)
+      const axle = at(checkpointRack.barOffset, l, .25)
       frame.box(graphite, axle, [.53, .51, .49], yaw)
       frame.box(paint, axle.clone().addScaledVector(worldUp, .19), [.48, .21, .46], yaw)
     }
 
     const powered = material('#76918d', .45, .37)
-    for (let d = cruxRack.barOffset + .83; d < end - .26; d += .46) {
+    for (let d = checkpointRack.barOffset + .83; d < end - .26; d += .46) {
       // Only the roller crowns protrude above the black belt.
       metalwork.rod(steel, at(d, -width + .65, -.047), at(d, width - .65, -.047), .108, 10)
     }
-    for (let d = cruxRack.barOffset + 1.0; d < end - .74; d += 1.6) for (const side of [-1, 1]) {
+    for (let d = checkpointRack.barOffset + 1.0; d < end - .74; d += 1.6) for (const side of [-1, 1]) {
       metalwork.surface(powered, d, d + .58, (ds, t) =>
         at(ds, side * (.08 + (1 - (ds - d) / .58) * .86 + t * .19), .070), .19)
     }
@@ -172,33 +175,33 @@ export function createCruxStations(track: CourseTrack, group: THREE.Group) {
       if (!count) return
       const seatBatch = new SceneryBatch(), barBatch = new SceneryBatch()
       for (let i = 0; i < count; i++) {
-        const l = cruxRackSlot(count, i)
+        const l = checkpointRackSlot(count, i)
         // Fanned belt guide marks converge at the throat and align with the rack.
         for (const sign of [-1, 1]) {
-          seatBatch.surface(steel, .24, cruxRack.seatOffset + .14, (d, t) => {
-            const u = THREE.MathUtils.smoothstep(d, .24, cruxRack.seatOffset - .44)
+          seatBatch.surface(steel, .24, checkpointRack.seatOffset + .14, (d, t) => {
+            const u = THREE.MathUtils.smoothstep(d, .24, checkpointRack.seatOffset - .44)
             const target = l + sign * .32
             return at(d, target * (.12 + .88 * u) + .035 * t, .054)
           }, .035)
         }
         for (let rib = 0; rib < 4; rib++) {
-          const d = cruxRack.seatOffset - .75 + rib * .23
+          const d = checkpointRack.seatOffset - .75 + rib * .23
           plate(seatBatch, steel, d, d + .052, l - .28, l + .28, .058)
         }
       }
-      const half = Math.abs(cruxRackSlot(count, 0)) + .66
-      const left = at(cruxRack.barOffset, -half, .58), right = at(cruxRack.barOffset, half, .58)
+      const half = Math.abs(checkpointRackSlot(count, 0)) + .66
+      const left = at(checkpointRack.barOffset, -half, .58), right = at(checkpointRack.barOffset, half, .58)
       barBatch.rod(chrome, left, right, .117, 16)
       for (const side of [-1, 1]) {
-        const cap = at(cruxRack.barOffset, side * half, .58)
+        const cap = at(checkpointRack.barOffset, side * half, .58)
         barBatch.rod(chrome, cap.clone().addScaledVector(across, -.08), cap.clone().addScaledVector(across, .08), .166, 12)
-        const end = at(cruxRack.barOffset, side * (width - .46), .55)
+        const end = at(checkpointRack.barOffset, side * (width - .46), .55)
         barBatch.rod(steel, cap, end, .064, 8)
         barBatch.rod(steel, end.clone().addScaledVector(worldUp, -.32), end, .082, 8)
       }
       seatBatch.finish(slots); barBatch.finish(bar)
     }
-    const reject = createCruxRejectChute(track, s, machine, { rubber, stripe: red, chrome, label: outLabel })
+    const reject = createCheckpointRejectChute(track, s, machine, { rubber, stripe: red, chrome, label: outLabel })
     metalwork.finish(machine); pass.finish(bypass)
     machine.add(slots, bar); group.add(machine, bypass)
     const ctx = (map.image as HTMLCanvasElement).getContext('2d')!

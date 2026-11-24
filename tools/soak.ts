@@ -8,7 +8,8 @@ import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkAfterglow } from './check-afterglow';
-import { checkCruxKnockouts } from './check-crux';
+import { checkCheckpointKnockouts } from './check-checkpoints';
+import { checkpointCount } from '../src/courses/checkpoints';
 import { cruxJumps } from '../src/courses/crux';
 import { checkSpectralMechanics } from './check-spectral';
 import { orreryJumps } from '../src/courses/orreryJumps';
@@ -111,14 +112,10 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
           winnerSeconds.push(winnerTime);
           transferSeconds.push(...transfer.seconds(seed));
-        } else if (track.id === 'afterglow') {
-          assert.equal(race.competition, undefined);
-          const winner = finishers[0].finishTime!, last = finishers[count - 1].finishTime!;
-          assert.ok(winner >= 60 && last <= 90, `Afterglow, seed ${seed}, field ${count}: finish times ${winner}–${last} fell outside 60–90 seconds.`);
-          winnerSeconds.push(winner);
-        } else if (track.id === 'crux' || track.id === 'spectral') {
+        }
+        if (checkpointCount(track.id)) {
           const gates = race.competition!.gates;
-          assert.equal(gates.length, track.id === 'crux' ? 4 : 5);
+          assert.equal(gates.length, checkpointCount(track.id));
           const previousSplit = Array<number>(count).fill(0);
           for (const gate of gates) {
             assert.equal(gate.arrivals.length, count);
@@ -133,7 +130,12 @@ function exerciseField(track: CourseTrack, count: number) {
             assert.equal(gate.releasedAt, null);
           }
           const winningTime = finishers[0].finishTime!;
-          assert.ok(winningTime >= 120, track.id + ' winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
+          if (track.id === 'afterglow') {
+            const last = finishers[count - 1].finishTime!;
+            assert.ok(winningTime >= 60 && last <= 90, `Afterglow, seed ${seed}, field ${count}: finish times ${winningTime}–${last} fell outside 60–90 seconds.`);
+          } else if (track.id === 'crux' || track.id === 'spectral') {
+            assert.ok(winningTime >= 120, track.id + ' winner crossed before two minutes at seed ' + seed + ', field ' + count + ': ' + winningTime);
+          }
           winnerSeconds.push(winningTime);
         }
         wins[finishers[0].slot]++;
@@ -159,6 +161,7 @@ function exerciseField(track: CourseTrack, count: number) {
   console.log(JSON.stringify({
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
+    meanSeconds: durations.length ? +(durations.reduce((sum, seconds) => sum + seconds, 0) / durations.length).toFixed(2) : null,
     ...(winnerSeconds.length && {
       [track.id === 'crux' ? 'winningSeconds' : 'winnerSeconds']: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
     }),
@@ -231,10 +234,8 @@ for (const id of courseIds) {
   if (id === 'prism') checkPrismBanks(track);
   if (id === 'afterglow') checkAfterglow(track);
   if (id === 'kepler') checkKeplerReceiver(track);
-  if (id === 'crux') {
-    checkCruxKnockouts(track, firstSeed, repetitions);
-    checkCourseJumps(track, firstSeed, cruxJumps);
-  }
+  if (checkpointCount(id)) checkCheckpointKnockouts(track, firstSeed, repetitions);
+  if (id === 'crux') checkCourseJumps(track, firstSeed, cruxJumps);
   if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral', 'afterglow'].includes(id)) checkSectionStarts(track);
   if (id === 'spectral') checkSpectralMechanics(track, firstSeed);
   if (id === 'timber') checkTimberLevels(track);

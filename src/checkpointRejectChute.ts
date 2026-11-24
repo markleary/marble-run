@@ -1,13 +1,13 @@
 import * as THREE from 'three'
 import type { CourseTrack } from './track'
-import { cruxRack } from './courses/cruxCheckpoints'
+import { checkpointRack } from './courses/checkpointRack'
 import type { MarbleState } from './simulation'
 import { SceneryBatch, lifted, type Material } from './sceneryKit'
 
 /** Once the timing beam has classified the last arrival, a short return chute
  * takes its marble to a pocket beside the starting rack. Both the visible
  * chute and the post-cut roll follow this curve. */
-export function createCruxRejectChute(track: CourseTrack, throat: number, machine: THREE.Group,
+export function createCheckpointRejectChute(track: CourseTrack, throat: number, machine: THREE.Group,
   finishes: { rubber: Material; stripe: Material; chrome: Material; label: Material }) {
   const { rubber, stripe, chrome, label } = finishes
   const fixed = new SceneryBatch(), ports = new SceneryBatch()
@@ -113,7 +113,7 @@ export function createCruxRejectChute(track: CourseTrack, throat: number, machin
         const rollStart = Math.max(divertedAt + handoff, pocketAt)
         const startFraction = THREE.MathUtils.clamp((rollStart - divertedAt - handoff) / (parked - handoff), 0, 1)
         const from = .43 * startFraction * (2 - startFraction)
-        const t = THREE.MathUtils.clamp((seconds - rollStart) / (pocketAt + cruxRack.pocketTravelSeconds - rollStart), 0, 1)
+        const t = THREE.MathUtils.clamp((seconds - rollStart) / (pocketAt + checkpointRack.pocketTravelSeconds - rollStart), 0, 1)
         if (seconds >= rollStart) progress = from + (1 - from) * t * (2 - t)
       }
       chute.getPoint(progress, mesh.position)

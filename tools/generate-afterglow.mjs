@@ -20,10 +20,12 @@ function section(name, ...pieces) {
 }
 
 section('Dial-In Grid', line(19))
-section('Crossfader Alley', line(36))
+// Full-width station aprons keep the rack and its launch clear of the moving pucks
+// and the narrow mono deck. Both feed a straight exit into the next bank.
+section('Crossfader Alley', line(57))
 section('Carrier Spiral', arc(13.8, 270))
 section('Mono Bridge', line(43))
-section('Sideband Turn', arc(13.3, -180))
+section('Sideband Turn', line(31), arc(13.3, -180))
 section('Stereo Return', line(47), arc(17, -180))
 section('Sign-Off Sprint', line(43))
 

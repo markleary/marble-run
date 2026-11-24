@@ -1,7 +1,8 @@
 import type { CourseTrack, TrackSample } from './courseGeometry'
-import type { CruxFormat } from './courses/cruxCheckpoints'
 import { crossingTime } from './raceTiming'
 import type { MarbleState } from './simulation'
+
+export type CheckpointFormat = 'knockout' | 'endurance'
 
 interface Crossing { id: number; time: number }
 export interface RaceCheckpoint {
@@ -22,7 +23,7 @@ export interface RaceCheckpoint {
 }
 
 export function createCheckpointRace(track: CourseTrack, count: number,
-  lines: readonly Pick<RaceCheckpoint, 'number' | 'name' | 's' | 'entryS'>[], format: CruxFormat = 'endurance') {
+  lines: readonly Pick<RaceCheckpoint, 'number' | 'name' | 's' | 'entryS'>[], format: CheckpointFormat = 'endurance') {
   let field = count
   const timingLines = lines.filter(gate => gate.entryS > track.startS)
   const gates: RaceCheckpoint[] = timingLines.map(({ number, name, s, entryS }, index): RaceCheckpoint => {

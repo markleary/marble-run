@@ -7,10 +7,10 @@ import '@fontsource/barlow-condensed/latin-800-italic.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import './style.css';
 import { setupInstall } from './install';
-import { courseIds, courses, fieldSizes } from './courses/catalog';
+import { checkpointCourseIds, courseIds, courses, fieldSizes, standardCourseIds } from './courses/catalog';
 import type { CourseId } from './courses/catalog';
-import type { CruxFormat } from './courses/cruxCheckpoints';
-import type { RaceCheckpoint } from './checkpointRace';
+import { checkpointCount } from './courses/checkpoints';
+import type { CheckpointFormat, RaceCheckpoint } from './checkpointRace';
 import { spectralGateColors } from './courses/spectralCheckpoints';
 import { Standings, finishPoints, normalizedName } from './standings';
 
@@ -29,7 +29,7 @@ export interface RaceRow {
 }
 
 export interface UIActions {
-  onStart: (racers: Racer[], format: CruxFormat) => void;
+  onStart: (racers: Racer[], format: CheckpointFormat) => void;
   onSetup: () => void;
   onSound: (enabled: boolean) => void;
   onPreview: (racers: Racer[], course: CourseId) => void;
@@ -111,7 +111,7 @@ function writeSetting(key: string, value: string) {
 const setupKey = 'marble-run:setup:v2';
 const soundKey = 'marble-run:sound:v1';
 interface Entry { name: string; livery: number }
-interface Setup { course: CourseId; format: CruxFormat; count: number; entries: Entry[]; marker: number | null }
+interface Setup { course: CourseId; format: CheckpointFormat; count: number; entries: Entry[]; marker: number | null }
 
 function readSetup(): Setup {
   function read(key: string) {
@@ -146,6 +146,12 @@ function clock(seconds: number) {
 
 function colorDot(color: string) {
   return '<span class="identity-dot" aria-hidden="true" style="--livery:' + color + '"></span>';
+}
+
+function courseButton(id: CourseId) {
+  const { title, averageSeconds } = courses[id];
+  const timing = checkpointCourseIds.includes(id) ? 'Average Endurance time' : 'Average race time';
+  return `<button type="button" data-course="${id}" aria-description="${timing} ${Math.round(averageSeconds)} seconds"><span aria-hidden="true" class="track-stripes"></span>${title}</button>`;
 }
 
 export function createUI(container: HTMLElement, actions: UIActions) {
@@ -270,16 +276,17 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   function syncSetup() {
     writeSetting(setupKey, JSON.stringify(config));
     const field = previewRacers();
-    const format = element<HTMLFieldSetElement>('.crux-format');
-    format.hidden = config.course !== 'crux';
+    const format = element<HTMLFieldSetElement>('.checkpoint-format');
+    const gateCount = checkpointCount(config.course);
+    format.hidden = gateCount === 0;
     if (!format.hidden) {
       format.querySelectorAll<HTMLButtonElement>('[data-format]').forEach(button => {
         button.setAttribute('aria-pressed', String(button.dataset.format === config.format));
       });
-      const cutCount = config.count - 2;
+      const cutCount = Math.min(config.count - 2, gateCount);
       const rule = config.format === 'endurance' ? 'Gates stay open. All marbles race to the finish.'
         : cutCount === 0 ? 'Two finalists race straight to the finish.'
-        : (cutCount === 1 ? 'One cut at CP 4.' : 'Cuts at CP ' + (5 - cutCount) + '–4.') + ' Last across the ENTRY stripe is out. Qualifiers restart together.';
+        : (cutCount === 1 ? 'One cut at CP ' + gateCount + '.' : 'Cuts at CP ' + (gateCount - cutCount + 1) + '–' + gateCount + '.') + ' Last across the ENTRY stripe is out. Qualifiers restart together.';
       format.querySelector('p')!.textContent = rule;
     }
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.count) === config.count)));
@@ -313,13 +320,15 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     panel.innerHTML = `
       <form class="setup-form">
         <div class="panel-title"><h1>Race setup</h1><span class="checker" aria-hidden="true"></span></div>
-        <fieldset class="track-picker"><legend>Track</legend><div class="track-options">
-          ${courseIds.map(id => `<button type="button" data-course="${id}"${id === 'crux' || id === 'spectral' ? ' aria-description="Race time over two minutes"' : ''}><span aria-hidden="true" class="track-stripes"></span>${courses[id].title}</button>`).join('')}
-        </div></fieldset>
+        <fieldset class="track-picker"><legend>Track</legend>
+          <div class="track-options">${standardCourseIds.map(courseButton).join('')}</div>
+          <div class="checkpoint-track-label" id="checkpoint-track-label">Checkpoint tracks</div>
+          <div class="track-options" role="group" aria-labelledby="checkpoint-track-label">${checkpointCourseIds.map(courseButton).join('')}</div>
+        </fieldset>
         <fieldset class="field-size"><legend>Marbles</legend><div class="count-choices" aria-label="Number of marbles">
           ${fieldSizes.map((n) => '<button type="button" data-count="' + n + '" aria-label="' + n + ' marbles"><b>' + n + '</b></button>').join('')}
         </div></fieldset>
-        <fieldset class="crux-format" hidden><legend>Race format</legend><div class="format-choices">
+        <fieldset class="checkpoint-format" hidden><legend>Race format</legend><div class="format-choices">
           <button type="button" data-format="knockout">Knockout</button>
           <button type="button" data-format="endurance">Endurance</button>
         </div><p class="swap-hint"></p></fieldset>
@@ -345,7 +354,7 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     });
     panel.querySelectorAll<HTMLButtonElement>('[data-count]').forEach((button) => button.addEventListener('click', () => { config.count = Number(button.dataset.count); syncSetup(); }));
     panel.querySelectorAll<HTMLButtonElement>('[data-format]').forEach(button => button.addEventListener('click', () => {
-      config.format = button.dataset.format as CruxFormat;
+      config.format = button.dataset.format as CheckpointFormat;
       syncSetup();
     }));
     panel.querySelectorAll<HTMLLIElement>('.entrant-row').forEach((row, slot) => {
@@ -376,27 +385,21 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   }
 
   function updateCheckpoint(seconds: number, gates?: readonly RaceCheckpoint[]) {
+    const showSectors = config.course === 'spectral';
     checkpointStatus.hidden = !gates;
-    checkpointSteps.hidden = !gates || config.course !== 'spectral';
+    checkpointSteps.hidden = !gates || !showSectors;
     if (!gates) return;
-    if (config.course === 'spectral') {
+    if (showSectors) {
       const cleared = gates.filter(gate => gate.arrivals.length > 0).length;
       if (checkpointSteps.dataset.cleared !== String(cleared)) {
         checkpointSteps.dataset.cleared = String(cleared);
         checkpointSteps.innerHTML = gates.map((gate, i) => `<span class="${i < cleared ? 'cleared' : ''}" style="--signal:${spectralGateColors[i]}">${gate.number}</span>`).join('');
       }
-      const last = gates[cleared - 1];
-      const split = last?.arrivals[0];
-      const message = split && seconds - split.time < 5
-        ? last.name + ' · ' + racers[split.id].name + ' · ' + clock(split.time)
-        : cleared < gates.length ? 'Checkpoint ' + (cleared + 1) + ' of ' + gates.length + ' ahead' : 'Final stretch';
-      if (checkpointStatus.textContent !== message) checkpointStatus.textContent = message;
-      return;
     }
-    const next = gates.find(gate => gate.arrivals.length < gate.field);
+    const next = gates.find(gate => gate.arrivals.length < (showSectors && !gate.cut ? 1 : gate.field));
     const loading = gates.find(gate => gate.phase === 'loading');
     const released = gates.find(gate => gate.releasedAt !== null && seconds - gate.releasedAt < 3);
-    const split = gates.find(gate => !gate.cut && gate.arrivals[0] && seconds - gate.arrivals[0].time < 3);
+    const split = gates.find(gate => !gate.cut && gate.arrivals[0] && seconds - gate.arrivals[0].time < (showSectors ? 5 : 3));
     let message = 'Final stretch';
     if (loading) {
       const last = loading.arrivals[loading.field - 1];
@@ -405,9 +408,11 @@ export function createUI(container: HTMLElement, actions: UIActions) {
     } else if (released) {
       message = released.name + ' · ' + (released.field - 1) + ' released · ' + racers[released.arrivals[released.field - 1].id].name + ' out';
     } else if (split) {
-      message = split.name + ' · ' + racers[split.arrivals[0].id].name + ' leads';
+      message = split.name + ' · ' + racers[split.arrivals[0].id].name
+        + (showSectors ? ' · ' + clock(split.arrivals[0].time) : ' leads');
     } else if (next) {
-      message = next.name + ' · ' + (next.cut ? (next.field - 1) + ' places' : 'Open gate');
+      message = showSectors && !next.cut ? 'Checkpoint ' + next.number + ' of ' + gates.length + ' ahead'
+        : next.name + ' · ' + (next.cut ? (next.field - 1) + ' places' : 'Open gate');
     }
     if (checkpointStatus.textContent !== message) checkpointStatus.textContent = message;
   }
@@ -476,17 +481,11 @@ export function createUI(container: HTMLElement, actions: UIActions) {
   }
 
   function checkpointResults(gates: readonly RaceCheckpoint[]) {
-    if (config.course === 'spectral') {
-      return '<details class="checkpoint-results"><summary>Checkpoint splits</summary>' + gates.map(gate => {
-        const leader = gate.arrivals[0];
-        return '<details class="split-detail"><summary><b>' + gate.name + '</b> · ' + escapeText(racers[leader.id].name) + ' · ' + clock(leader.time) + '</summary><ol>' +
-          gate.arrivals.map(({ id, time }, i) => '<li><b>' + (i + 1) + '</b><span>' + colorDot(racers[id].color) + escapeText(racers[id].name) + '</span><time>' + clock(time) + '</time></li>').join('') + '</ol></details>';
-      }).join('') + '</details>';
-    }
-    return '<details class="checkpoint-results"><summary>Checkpoint leaders</summary><ol>' + gates.map(gate => {
-      const first = gate.arrivals[0];
-      return '<li><b>' + gate.name + '</b><span>' + escapeText(racers[first.id].name) + '</span><time>' + clock(first.time) + '</time></li>';
-    }).join('') + '</ol></details>';
+    return '<details class="checkpoint-results"><summary>Checkpoint splits</summary>' + gates.map(gate => {
+      const leader = gate.arrivals[0];
+      return '<details class="split-detail"><summary><b>' + gate.name + '</b> · ' + escapeText(racers[leader.id].name) + ' · ' + clock(leader.time) + '</summary><ol>' +
+        gate.arrivals.map(({ id, time }, i) => '<li><b>' + (i + 1) + '</b><span>' + colorDot(racers[id].color) + escapeText(racers[id].name) + '</span><time>' + clock(time) + '</time></li>').join('') + '</ol></details>';
+    }).join('') + '</details>';
   }
 
   function showFailure(message: string) {

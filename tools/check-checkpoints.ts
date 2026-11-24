@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { Group, MeshStandardMaterial, Object3D, Vector3 } from 'three'
-import { createCruxRejectChute } from '../src/cruxRejectChute'
+import { createCheckpointRejectChute } from '../src/checkpointRejectChute'
 import { compareRacePosition } from '../src/raceTiming'
-import { cruxCheckpoints, cruxRack, cruxRackSlot } from '../src/courses/cruxCheckpoints'
+import { checkpointRack, checkpointRackSlot } from '../src/courses/checkpointRack'
+import { checkpointStations } from '../src/courses/checkpoints'
 import { FIXED_DT, RaceSimulation } from '../src/simulation'
 import type { CourseTrack } from '../src/track'
 
@@ -10,7 +11,7 @@ function checkPhotoCut(track: CourseTrack) {
   const race = new RaceSimulation(track, 6, 1, 'knockout')
   try {
     const competition = race.competition!
-    const gate = competition.gates[0]
+    const gate = competition.gates.find(gate => gate.cut)!
     function cross(id: number, s: number, fraction: number) {
       const marble = race.marbles[id]
       const { x, y, z, tx, tz } = track.sample(s)
@@ -20,6 +21,11 @@ function checkPhotoCut(track: CourseTrack) {
       marble.position = { x: x - tx * (before - .08), y, z: z - tz * (before - .08) }
     }
     // Enter 5,4,3,2,1,0, then let 0 pass 1 inside the funnel and reach the fork first.
+    for (const open of competition.gates) {
+      if (open === gate) break
+      for (const marble of race.marbles) cross(marble.id, open.entryS, .5)
+      competition.step(race.marbles, .5, FIXED_DT, () => assert.fail('An open gate eliminated a racer.'))
+    }
     for (const marble of race.marbles) cross(marble.id, gate.entryS, .8 - .1 * marble.id)
     const withdrawn: number[] = []
     competition.step(race.marbles, 1, FIXED_DT, id => withdrawn.push(id))
@@ -42,7 +48,7 @@ function checkLoadingRacks(track: CourseTrack, race: RaceSimulation) {
         const marble = race.marbles[id]
         assert.equal(marble.stagingAt, undefined)
         assert.equal(marble.rackSlot, undefined)
-        assert.ok(Math.abs(marble.distance - gate.s - cruxRack.seatOffset) < .16,
+        assert.ok(Math.abs(marble.distance - gate.s - checkpointRack.seatOffset) < .16,
           'Every qualifier must restart from its pad on the release tick.')
       }
     }
@@ -54,9 +60,9 @@ function checkLoadingRacks(track: CourseTrack, race: RaceSimulation) {
     for (const [slot, marble] of qualifiers.entries()) {
       assert.equal(marble.stagingAt, gate.number)
       assert.equal(marble.rackSlot, slot)
-      assert.ok(marble.distance < gate.s + cruxRack.barOffset, 'A qualifier passed a closed release bar.')
+      assert.ok(marble.distance < gate.s + checkpointRack.barOffset, 'A qualifier passed a closed release bar.')
       if (gate.seated.includes(marble.id)) {
-        const seat = track.sample(gate.s + cruxRack.seatOffset, cruxRackSlot(capacity, slot))
+        const seat = track.sample(gate.s + checkpointRack.seatOffset, checkpointRackSlot(capacity, slot))
         assert.ok(Math.hypot(marble.position.x - seat.x, marble.position.z - seat.z) < .16,
           'A seated marble must occupy its assigned physical pad.')
       }
@@ -68,7 +74,7 @@ function checkLoadingRacks(track: CourseTrack, race: RaceSimulation) {
 /** Observe each nose at the painted entrance and mechanical throat, independently of the judge. */
 function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
   const records = race.competition!.gates.filter(g => g.cut).map(gate => ({
-    gate, s: gate.s - cruxRack.funnelLength, stripe: track.sample(gate.s - cruxRack.funnelLength),
+    gate, s: gate.s - checkpointRack.funnelLength, stripe: track.sample(gate.s - checkpointRack.funnelLength),
     times: new Map<number, number>(), through: new Set<number>(),
   }))
   let index = 0
@@ -92,8 +98,8 @@ function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
           const lateral = (p: typeof marble.position) => (p.x - line.x) * line.rx + (p.z - line.z) * line.rz
           const from = lateral(marble.previousPosition)
           const atThroat = from + fraction * (lateral(marble.position) - from)
-          assert.ok(Math.abs(atThroat) <= cruxRack.throatHalfWidth,
-            `Crux seed ${race.seed}, CP ${gate.number}: marble ${marble.id} crossed outside the throat at ${atThroat}.`)
+          assert.ok(Math.abs(atThroat) <= checkpointRack.throatHalfWidth,
+            `${track.id} seed ${race.seed}, CP ${gate.number}: marble ${marble.id} crossed outside the throat at ${atThroat}.`)
           through.add(marble.id)
         }
       }
@@ -117,8 +123,8 @@ function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
 /** Reproduce the displayed cut pose against interpolated qualifying bodies without a GPU. */
 function checkChuteClearance(track: CourseTrack) {
   const material = new MeshStandardMaterial()
-  const fixtures = cruxCheckpoints(track.sections).map(({ s }) =>
-    createCruxRejectChute(track, s, new Group(), { rubber: material, stripe: material, chrome: material, label: material }))
+  const fixtures = checkpointStations(track.id, track.sections).map(({ s }) =>
+    createCheckpointRejectChute(track, s, new Group(), { rubber: material, stripe: material, chrome: material, label: material }))
   const cut = new Object3D(), qualifier = new Vector3()
   return (race: RaceSimulation) => {
     for (const gate of race.competition!.gates) {
@@ -138,11 +144,11 @@ function checkChuteClearance(track: CourseTrack) {
   }
 }
 
-export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repetitions: number) {
+export function checkCheckpointKnockouts(track: CourseTrack, firstSeed: number, repetitions: number) {
   checkPhotoCut(track)
   const checkChute = checkChuteClearance(track)
   // These two six-wide approaches previously carried a racer over CP1's outer rail.
-  for (const seed of [295, 375]) {
+  for (const seed of track.id === 'crux' ? [295, 375] : []) {
     const race = new RaceSimulation(track, 6, seed, 'knockout')
     try {
       const entrances = watchEntranceOrder(track, race)
@@ -170,15 +176,17 @@ export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repeti
           checkChute(race)
           if (seed === firstSeed) checkLoadingRacks(track, race)
         }
-        assert.ok(race.finished, `Crux knockout with ${count} racers, seed ${seed}: ${race.failure}`)
+        assert.ok(race.finished, `${track.id} knockout with ${count} racers, seed ${seed}: ${race.failure}`)
         entrances.verify()
         const order = [...race.marbles].sort(compareRacePosition)
-        assert.equal(order.filter(m => m.finishTime !== null).length, 2)
-        assert.ok(order[0].finishTime! >= 120 && order[0].finishTime! <= order[1].finishTime!)
+        const cuts = Math.min(count - 2, race.competition!.gates.length)
+        assert.equal(order.filter(m => m.finishTime !== null).length, count - cuts)
+        assert.ok(order[0].finishTime! > 0 && order[0].finishTime! <= order[1].finishTime!)
+        if (track.id === 'crux' || track.id === 'spectral') assert.ok(order[0].finishTime! >= 120)
         winners.push(order[0].finishTime!)
         wins[order[0].slot]++
         const stillRacing = new Set(race.marbles.map(m => m.id))
-        assert.equal(race.competition!.gates.filter(gate => gate.cut).length, count - 2)
+        assert.equal(race.competition!.gates.filter(gate => gate.cut).length, cuts)
         for (const [i, gate] of race.competition!.gates.entries()) {
           assert.equal(gate.field, stillRacing.size)
           assert.equal(gate.arrivals.length, gate.field)
@@ -190,7 +198,7 @@ export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repeti
             assert.ok(gate.releasedAt !== null && gate.releasedAt > last.time)
             assert.ok(gate.divertedAt !== null && gate.divertedAt > last.time)
             assert.ok(gate.pocketAt !== null && gate.pocketAt >= gate.divertedAt)
-            assert.ok(gate.pocketAt !== null && gate.releasedAt >= gate.pocketAt + cruxRack.pocketTravelSeconds)
+            assert.ok(gate.pocketAt !== null && gate.releasedAt >= gate.pocketAt + checkpointRack.pocketTravelSeconds)
             assert.deepEqual(new Set(gate.seated), new Set(gate.arrivals.slice(0, -1).map(a => a.id)))
             assert.equal(order[gate.field - 1].id, last.id)
             assert.equal(order[gate.field - 1].cutAt, i + 1)
@@ -202,12 +210,12 @@ export function checkCruxKnockouts(track: CourseTrack, firstSeed: number, repeti
             assert.deepEqual(gate.seated, [])
           }
         }
-        assert.deepEqual(stillRacing, new Set(order.slice(0, 2).map(m => m.id)))
+        assert.deepEqual(stillRacing, new Set(order.slice(0, count - cuts).map(m => m.id)))
       } finally {
         race.dispose()
       }
     }
-    console.log(JSON.stringify({ course: 'crux', format: 'knockout', count, heats: repetitions, winningSlots: wins,
+    console.log(JSON.stringify({ course: track.id, format: 'knockout', count, heats: repetitions, winningSlots: wins,
       winningSeconds: [Math.min(...winners), Math.max(...winners)].map(t => +t.toFixed(2)) }))
   }
 }

@@ -8,7 +8,7 @@ import type { CourseId } from './courses/catalog';
 import type { RaceCheckpoint } from './checkpointRace';
 import { cruxJumps } from './courses/crux';
 import { cruxObstacleBoards, type CruxBoardId } from './courses/cruxObstacles';
-import { cruxRack } from './courses/cruxCheckpoints';
+import { checkpointRack } from './courses/checkpointRack';
 import { afterglowCue } from './courses/afterglow';
 import { createCourseScenery, type CourseScenery } from './scenery';
 import keplerNebula from './assets/kepler-nebula.jpg';
@@ -17,6 +17,7 @@ import { keplerStars } from './keplerStars';
 import { spectralPaint, spectralReflections } from './spectralMarbles';
 import { spectralTurbine } from './spectralArena';
 import { spectralOffset } from './courses/spectral';
+import { spectralDial } from './courses/spectralCheckpoints';
 
 type Offset = [number, number, number];
 interface Shot { offset: Offset; portraitOffset?: Offset; anchor?: number; fixed?: boolean; trackRelative?: boolean; holdPastEnd?: number }
@@ -473,8 +474,8 @@ export class RaceBroadcast {
 
   update(marbles: MarbleState[], alpha: number, dt: number, elapsed: number, gates?: readonly RaceCheckpoint[]) {
     const displayTime = this.mode === 'race' ? Math.max(0, elapsed - (1 - alpha) * FIXED_DT) : elapsed;
-    this.scenery?.setRaceTime?.(displayTime + (this.track.id === 'afterglow' ? this.faderCue : 0));
     this.scenery?.updateStations?.(gates, displayTime);
+    this.scenery?.setRaceTime?.(displayTime + (this.track.id === 'afterglow' ? this.faderCue : 0));
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
       this.displayDistances[marble.id] = THREE.MathUtils.lerp(marble.previousDistance, marble.distance, alpha);
@@ -547,36 +548,20 @@ export class RaceBroadcast {
     let feature = '';
     let featureFrame: THREE.Vector3[] | undefined;
     const station = gates?.find(g => g.cut && (g.phase === 'loading'
-      || (g.phase === 'ready' && lead >= g.entryS - 1 && lead <= g.s + cruxRack.seatOffset + 1)
+      || (g.phase === 'ready' && lead >= g.entryS - 1 && lead <= g.s + checkpointRack.seatOffset + 1)
       || (g.releasedAt !== null && elapsed - g.releasedAt < 1.1)));
     const jump = this.track.id === 'crux' && cruxJumps.find(j => lead >= j.rampStart - 2 && lead <= j.catchEnd);
     const board = this.track.id === 'crux' && cruxObstacleBoards.find(b => lead >= b.start - 2 && center <= b.end + 1.3);
-    const split = this.track.id === 'spectral' && gates?.find(g => lead >= g.s - 9 && lead <= g.s + 4.8);
+    const split = this.track.id === 'spectral' && gates?.find(g => !g.cut && lead >= g.entryS - 9 && lead <= g.entryS + 4.8);
     const carousel = this.turbine && this.track.sections[2];
     const arc = carousel ? (lead - carousel.start) / (carousel.end - carousel.start) : 0;
-    if (this.turbine && arc >= .32 && arc <= .66) {
-      // A short establishing shot keeps the turbine and the racers in the same frame.
-      feature = 'carousel';
-      this.focusGoal.lerp(this.turbine.hub, .39);
-      offset = [-3 * p.tx - 15 * p.rx, 26, -3 * p.tz - 15 * p.rz];
-      featureFrame = [...pack.map(m => this.balls[m.id].position),
-        new THREE.Vector3(this.turbine.hub.x + .55 * this.turbine.fanRadius * p.rx,
-          this.turbine.hub.y, this.turbine.hub.z + .55 * this.turbine.fanRadius * p.rz)];
-    } else if (split) {
-      feature = split.name;
-      const line = split.line, sign = this.track.sample(split.s, -this.track.halfWidth - .64);
-      const dial = new THREE.Vector3(sign.x, sign.y + 3.4, sign.z);
-      this.focusGoal.lerp(dial, .24);
-      offset = [-7.8 * line.tx + 7.2 * line.rx, 5.9, -7.8 * line.tz + 7.2 * line.rz];
-      featureFrame = [...pack.map(m => this.balls[m.id].position),
-        dial.clone().addScaledVector(this.camera.up, 1.6), dial.clone().addScaledVector(this.camera.up, -1.6)];
-    } else if (station) {
+    if (station) {
       feature = 'gate-' + station.number;
       // Stay on the actual timing stripe through the last entrance, including a close finish.
       const lastEntry = station.arrivals[station.field - 1];
       const loading = lastEntry !== undefined && elapsed >= lastEntry.time + .45;
       feature += loading ? '-rack' : '-entry';
-      const far = loading ? station.s + cruxRack.barOffset + .9 : station.entryS + 3.2;
+      const far = loading ? station.s + checkpointRack.barOffset + .9 : station.entryS + 3.2;
       const near = loading ? station.s - .9 : station.entryS - 3.2;
       const anchor = this.track.sample(loading ? station.s + 2.9 : (far + near) / 2);
       this.focusGoal.set(anchor.x, anchor.y + .98, anchor.z);
@@ -587,6 +572,22 @@ export class RaceBroadcast {
         const p = this.track.sample(s, side * (loading ? this.track.halfWidth - .32 : this.track.halfWidth - .17));
         return new THREE.Vector3(p.x, p.y + (loading && s === near ? 3.1 : .55), p.z);
       }));
+    } else if (this.turbine && arc >= .32 && arc <= .66) {
+      // A short establishing shot keeps the turbine and the racers in the same frame.
+      feature = 'carousel';
+      this.focusGoal.lerp(this.turbine.hub, .39);
+      offset = [-3 * p.tx - 15 * p.rx, 26, -3 * p.tz - 15 * p.rz];
+      featureFrame = [...pack.map(m => this.balls[m.id].position),
+        new THREE.Vector3(this.turbine.hub.x + .55 * this.turbine.fanRadius * p.rx,
+          this.turbine.hub.y, this.turbine.hub.z + .55 * this.turbine.fanRadius * p.rz)];
+    } else if (split) {
+      feature = split.name;
+      const line = split.entryLine, sign = this.track.sample(split.entryS, -this.track.halfWidth - spectralDial.shoulderOffset);
+      const dial = new THREE.Vector3(sign.x, sign.y + spectralDial.height, sign.z);
+      this.focusGoal.lerp(dial, .24);
+      offset = [-7.8 * line.tx + 7.2 * line.rx, 5.9, -7.8 * line.tz + 7.2 * line.rz];
+      featureFrame = [...pack.map(m => this.balls[m.id].position),
+        dial.clone().addScaledVector(this.camera.up, 1.6), dial.clone().addScaledVector(this.camera.up, -1.6)];
     } else if (jump) {
       feature = jump.name;
       // Track the airborne bodies rather than the interpolation surface through the gap.

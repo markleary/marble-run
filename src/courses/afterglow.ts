@@ -13,6 +13,7 @@ export function faderPose(track: CourseTrack, fader: typeof faders[number], seco
 }
 
 function afterglowProfile(pieces: PathPiece[]): Profile {
+  const [carrier, sideband, stereo] = pieces.filter(piece => piece.curvature !== 0)
   return {
     layered: true,
     widthScale: s => 1 - (1 - layout.bridgeScale) * ease(bridge.start, bridge.start + 12, s)
@@ -22,21 +23,21 @@ function afterglowProfile(pieces: PathPiece[]): Profile {
     collisionResolution: { rowSpacing: .42, bandsPerLane: 6 },
     deflectors: [],
     spans: [{ start: 0, end: layout.sections.at(-1)!.end, surface: 'lacquer' }],
-    wallHeight: () => 1.12,
+    wallHeight: s => 1.12 + 1.25 * (bankAt(s, carrier, 1, 8) + bankAt(s, sideband, 1, 8) + bankAt(s, stereo, 1, 10)),
     height(s, lateral) {
       const across = lateral / layout.halfWidth
-      const spiral = bankAt(s, pieces[2], 1, 7), sideband = bankAt(s, pieces[4], 1, 7)
-      const returnBend = bankAt(s, pieces[6], 1, 10)
-      const bank = -.34 * spiral + .38 * sideband + .42 * returnBend
-      const shoulder = (.46 * across ** 2 + .57 * across ** 6) * (spiral + sideband + returnBend)
+      const spiral = bankAt(s, carrier, 1, 7), sidebank = bankAt(s, sideband, 1, 7)
+      const returnBend = bankAt(s, stereo, 1, 10)
+      const bank = -.34 * spiral + .38 * sidebank + .42 * returnBend
+      const shoulder = (.46 * across ** 2 + .57 * across ** 6) * (spiral + sidebank + returnBend)
       const launch = launchTrim(across, layout.launchTrims) * (1 - ease(2, grid.end, s))
       const alleyDrop = .12 * clamp(s - alley.start, 0, alley.end - alley.start)
       const alleyShoulder = .30 * across ** 2 * ease(alley.start - 4, alley.start + 3, s) * (1 - ease(alley.end - 5, alley.end, s))
       // Lower each bank as it unwinds. The former inside line must keep
       // descending even if a sideways impact leaves a marble at rest.
-      const unwind = 1.18 * (ease(pieces[2].end - 7, pieces[2].end + 7, s) + ease(pieces[4].end - 7, pieces[4].end + 7, s))
-      const returnDrop = 1.15 * ease(pieces[6].end - 10, pieces[6].end + 10, s)
-      return 34 - .051 * s - 1.6 * (1 - Math.exp(-s / 6.5)) - alleyDrop - unwind - returnDrop + launch + lateral * bank + shoulder + alleyShoulder
+      const unwind = 1.18 * (ease(carrier.end - 7, carrier.end + 7, s) + ease(sideband.end - 7, sideband.end + 7, s))
+      const returnDrop = 1.15 * ease(stereo.end - 10, stereo.end + 10, s)
+      return 38 - .064 * s - 1.6 * (1 - Math.exp(-s / 6.5)) - alleyDrop - unwind - returnDrop + launch + lateral * bank + shoulder + alleyShoulder
     },
   }
 }

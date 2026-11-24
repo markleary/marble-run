@@ -1,10 +1,10 @@
 import { buildCourse, clamp, ease, launchTrim, type CourseTrack, type Profile } from '../courseGeometry'
 import layout from './crux-layout.json'
-import { cruxCheckpoints } from './cruxCheckpoints'
+import { checkpointStations } from './checkpoints'
 import { cruxObstacleBoards, cruxObstacleMesh, cruxObstacles } from './cruxObstacles'
 
 const { halfWidth, sections, jumps } = layout
-const stations = cruxCheckpoints(sections)
+const stations = checkpointStations('crux', sections)
 const gate = sections[0], runout = sections[sections.length - 1]
 export const cruxJumps = jumps
 type Jump = typeof jumps[number]
