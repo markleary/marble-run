@@ -4,7 +4,7 @@ import { RaceSound } from './sound';
 import type { CourseId } from './courses/catalog';
 import type { RaceBroadcast } from './broadcast';
 import type { RaceSimulation } from './simulation';
-import type { CruxFormat } from './courses/cruxCheckpoints';
+import type { CheckpointFormat } from './checkpointRace';
 import { compareRacePosition } from './raceTiming';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
@@ -13,7 +13,7 @@ let heat: RaceSimulation | undefined;
 let broadcast: RaceBroadcast | undefined;
 let entrants: Racer[] = [];
 let racingState: 'setup' | 'countdown' | 'race' | 'results' | 'failure' = 'setup';
-let stageHeat: ((field: Racer[], format: CruxFormat) => void) | undefined;
+let stageHeat: ((field: Racer[], format: CheckpointFormat) => void) | undefined;
 let requestFrame: (() => void) | undefined;
 let countdownRemaining = 0;
 let accumulator = 0;

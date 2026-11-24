@@ -3,7 +3,6 @@ import type { CourseTrack } from './track'
 import { cruxDeckSpans, cruxJumps, cruxJumpShield } from './courses/crux'
 import { cruxObstacleBoards } from './courses/cruxObstacles'
 import { createCruxObstacleScenery, cruxBoardFinishes } from './cruxObstacleScenery'
-import { createCruxStations } from './cruxStations'
 import { createCruxHall } from './cruxHall'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, woodTexture, type Material } from './sceneryKit'
 
@@ -266,7 +265,6 @@ export function createCruxScenery(track: CourseTrack) {
     }
   }
 
-  const stationsView = createCruxStations(track, group)
   const stations = [{ s: .20, name: 'START' }, { s: track.finishS, name: 'FINISH' }]
   for (const [index, { s, name }] of stations.entries()) {
     const start = index === 0
@@ -325,5 +323,5 @@ export function createCruxScenery(track: CourseTrack) {
   const end = track.sample(track.length)
   batch.box(black, lifted(end, .55), [.30, 1.18, w * 2 + .14], -Math.atan2(end.tz, end.tx))
   batch.finish(group)
-  return Object.assign(group, { frameCamera }, stationsView)
+  return Object.assign(group, { frameCamera })
 }

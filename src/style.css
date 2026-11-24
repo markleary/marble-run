@@ -71,6 +71,8 @@ fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
 .setup-form fieldset { position: relative; margin-top: clamp(18px, 3vh, 32px); }
 legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 .track-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; margin-top: 10px; }
+.checkpoint-track-label { margin-top: 15px; color: var(--muted); font: 600 14px/1.2 var(--sans); }
+.checkpoint-track-label + .track-options { margin-top: 6px; }
 .track-options button { display: flex; align-items: center; gap: 8px; padding: 9px 8px; min-height: 43px; background: #fffdf6; border: 1px solid #c6cbbd; border-radius: 4px; font: 600 clamp(15px,1.4vw,19px)/1.05 var(--display); text-align: left; }
 .track-options button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .track-options button:hover:not([aria-pressed="true"]) { background: #eceee4; }

@@ -8,7 +8,7 @@
   "laneCount": 6,
   "halfWidth": 4.2,
   "startS": 1.1,
-  "finishS": 342.2212253330794,
+  "finishS": 394.2212253330794,
   "sections": [
     {
       "name": "Dial-In Grid",
@@ -18,32 +18,32 @@
     {
       "name": "Crossfader Alley",
       "start": 19,
-      "end": 55
+      "end": 76
     },
     {
       "name": "Carrier Spiral",
-      "start": 55,
-      "end": 120.03096792930872
+      "start": 76,
+      "end": 141.0309679293087
     },
     {
       "name": "Mono Bridge",
-      "start": 120.03096792930872,
-      "end": 163.0309679293087
+      "start": 141.0309679293087,
+      "end": 184.0309679293087
     },
     {
       "name": "Sideband Turn",
-      "start": 163.0309679293087,
-      "end": 204.81415022205294
+      "start": 184.0309679293087,
+      "end": 256.81415022205294
     },
     {
       "name": "Stereo Return",
-      "start": 204.81415022205294,
-      "end": 305.2212253330794
+      "start": 256.81415022205294,
+      "end": 357.2212253330794
     },
     {
       "name": "Sign-Off Sprint",
-      "start": 305.2212253330794,
-      "end": 348.2212253330794
+      "start": 357.2212253330794,
+      "end": 400.2212253330794
     }
   ],
   "runs": [
@@ -52,7 +52,7 @@
       "curvature": 0
     },
     {
-      "length": 36,
+      "length": 57,
       "curvature": 0
     },
     {
@@ -61,6 +61,10 @@
     },
     {
       "length": 43,
+      "curvature": 0
+    },
+    {
+      "length": 31,
       "curvature": 0
     },
     {

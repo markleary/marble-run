@@ -1,5 +1,7 @@
 import { buildCourse, clamp, ease, type CollisionMesh, type CourseTrack, type Profile, type TrackSample } from '../courseGeometry'
 import layout from './spectral-layout.json'
+import type { RaceCheckpoint } from '../checkpointRace'
+import { checkpointRack } from './checkpointRack'
 
 export const spectralLaunch = layout.launch
 export const spectralFields = layout.fields
@@ -12,7 +14,9 @@ const galleryLength = galleryRuns.reduce((sum, run) => sum + run.length, 0)
 
 /** North and south poles exchange strength with the race clock. Both the rail
  * lights and the lateral impulse use this exact travelling wave. */
-export function spectralPolarity(field: Field, s: number, seconds: number) {
+export function spectralPolarity(field: Field, s: number, seconds: number, gates?: readonly RaceCheckpoint[]) {
+  // Coils alongside a deployed station switch off while the brake and launch belts steer the field.
+  if (gates?.some(gate => gate.cut && s >= gate.entryS && s <= gate.s + checkpointRack.launchEnd)) return 0
   return Math.cos((s - field.start) * Math.PI * 2 / field.pitch - seconds * 1.65 + field.phase)
     * ease(field.start, field.start + 3, s) * (1 - ease(field.end - 3, field.end, s))
 }
