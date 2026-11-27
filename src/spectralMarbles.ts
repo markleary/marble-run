@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { canvasTexture } from './sceneryKit'
+import { spectralFanWidthScale } from './courses/spectralFan'
 import type { CourseTrack } from './track'
 import type { MarbleState } from './simulation'
 import type { Racer } from './ui'
@@ -57,7 +58,7 @@ export function spectralReflections(group: THREE.Group, track: CourseTrack) {
       for (const m of marbles) {
         const pool = pools[m.id], position = meshes[m.id].position
         const s = Math.max(track.startS, displayDistances[m.id]), line = track.sample(s)
-        const lateral = (position.x - line.x) * line.rx + (position.z - line.z) * line.rz
+        const lateral = ((position.x - line.x) * line.rx + (position.z - line.z) * line.rz) / spectralFanWidthScale(s)
         const floor = track.sample(s, lateral), side = track.sample(s, lateral + .04)
         const near = track.sample(s - .08, lateral), far = track.sample(s + .08, lateral)
         across.set(side.x - floor.x, side.y - floor.y, side.z - floor.z)

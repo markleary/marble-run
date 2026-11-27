@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { CourseTrack } from './track'
-import { SceneryBatch, canvasTexture, lifted, material, type Material } from './sceneryKit'
+import { SceneryBatch, canvasTexture, lifted, type Material } from './sceneryKit'
 
 function pixelFloor() {
   const map = canvasTexture(256, 256, c => {
@@ -56,18 +56,7 @@ function galleryPanel() {
   return map
 }
 
-export function spectralTurbine(track: CourseTrack) {
-  const halo = track.sections[2], s = (halo.start + halo.end) / 2
-  const p = track.sample(s), a = track.sample(s - 1), b = track.sample(s + 1)
-  const turn = Math.atan2(a.tx * b.tz - a.tz * b.tx, a.tx * b.tx + a.tz * b.tz)
-  const radius = 2 / turn
-  return {
-    hub: new THREE.Vector3(p.x + radius * p.rx, p.y - 3.5, p.z + radius * p.rz),
-    fanRadius: Math.min(Math.abs(radius) - track.halfWidth - 1.8, 15),
-  }
-}
-
-export function addSpectralArena(group: THREE.Group, track: CourseTrack, hull: Material, blue: Material, white: Material) {
+export function addSpectralArena(group: THREE.Group, track: CourseTrack, hull: Material, blue: Material) {
   const bounds = new THREE.Box3()
   for (let s = 0; s < track.length + 2; s += 2) {
     for (const side of [-1, 1]) bounds.expandByPoint(lifted(track.sample(s, side * track.halfWidth), 0))
@@ -116,33 +105,5 @@ export function addSpectralArena(group: THREE.Group, track: CourseTrack, hull: M
     }
   }
 
-  // Fit the turbine hub inside the circular part of the Halo Carousel.
-  const { hub, fanRadius } = spectralTurbine(track)
-  const rotor = new THREE.Group()
-  rotor.position.copy(hub)
-  if (fanRadius > 2 && Number.isFinite(fanRadius)) {
-    const point = (dy: number) => new THREE.Vector3(hub.x, hub.y + dy, hub.z)
-    batch.rod(hull, new THREE.Vector3(hub.x, floorY, hub.z), point(-.75), fanRadius * .40, 16)
-    batch.rod(blue, point(-.95), point(-.65), fanRadius * .44, 32)
-    batch.rod(hull, point(-.65), point(-.2), fanRadius, 64)
-    const iris = new SceneryBatch(.32, { indexed: true }), nickel = material('#8397b2', .28, .72)
-    for (let i = 0; i < 12; i++) {
-      const angle = i * Math.PI / 6
-      const blade = (r: number, sweep: number, y: number) =>
-        new THREE.Vector3(Math.cos(angle + sweep) * r * fanRadius, y, Math.sin(angle + sweep) * r * fanRadius)
-      const corners = [blade(.19, -.13, 0), blade(.86, .38, 0), blade(.88, .53, .21), blade(.19, .22, .12)]
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(corners.flatMap(v => v.toArray()), 3))
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1], 2))
-      geo.setIndex([0, 2, 1, 0, 3, 2])
-      iris.add(nickel, geo)
-      iris.rod(i % 3 ? blue : white, corners[1], corners[0], .055, 5)
-    }
-    iris.rod(blue, new THREE.Vector3(), new THREE.Vector3(0, .26, 0), .22 * fanRadius, 32)
-    iris.rod(hull, new THREE.Vector3(0, .27, 0), new THREE.Vector3(0, .43, 0), .18 * fanRadius, 32)
-    iris.finish(rotor)
-    group.add(rotor)
-  }
   batch.finish(group)
-  return (seconds: number) => { rotor.rotation.y = seconds * .49 }
 }

@@ -1,4 +1,4 @@
-import type { CourseTrack } from '../courseGeometry'
+import { ease, type CourseTrack } from '../courseGeometry'
 
 export const checkpointRack = {
   funnelLength: 16,
@@ -9,11 +9,26 @@ export const checkpointRack = {
   launchSpeed: 7.8,
   slotSpacing: 1.4,
   railHeight: .55,
-  pocketTravelSeconds: .5,
+  pocketOffset: 3.4,
+  pocketSideInset: .66,
+  releaseDelay: .36,
 }
 
 export function checkpointRackSlot(capacity: number, arrivalIndex: number) {
   return (arrivalIndex - (capacity - 1) / 2) * checkpointRack.slotSpacing
+}
+
+/** The switch belt starts straight under the throat and turns across the deck. */
+export function checkpointRejectTurn(along: number) {
+  return ease(.12, checkpointRack.pocketOffset, along)
+}
+
+export function checkpointPocketRim(track: CourseTrack, throat: number) {
+  const center = -track.halfWidth + checkpointRack.pocketSideInset
+  return Array.from({ length: 13 }, (_, i) => {
+    const angle = i * Math.PI / 12
+    return track.sample(throat + checkpointRack.pocketOffset + .53 * Math.cos(angle), center - .53 * Math.sin(angle))
+  })
 }
 
 /** Rail centerlines in track coordinates relative to the mechanical fork at the throat. */

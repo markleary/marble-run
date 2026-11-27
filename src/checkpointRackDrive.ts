@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat'
 import type { CourseTrack } from './courseGeometry'
-import { checkpointFunnelTubes, checkpointRack, checkpointRackSlot } from './courses/checkpointRack'
+import { checkpointFunnelTubes, checkpointPocketRim, checkpointRack, checkpointRackSlot, checkpointRejectTurn } from './courses/checkpointRack'
 import type { RaceCheckpoint } from './checkpointRace'
 import type { MarbleState } from './simulation'
 
@@ -8,7 +8,12 @@ import type { MarbleState } from './simulation'
  * the release bar. The brakes engage only after a ball physically reaches its pad. */
 export function attachCheckpointRacks(world: RAPIER.World, track: CourseTrack, gates: RaceCheckpoint[], bodies: RAPIER.RigidBody[]) {
   const racks = gates.filter(gate => gate.cut).map(gate => {
-    for (const { start: a, end: b, radius } of checkpointFunnelTubes(track, gate.s, gate.number)) {
+    const rim = checkpointPocketRim(track, gate.s).map(p => ({ x: p.x, y: p.y + .13, z: p.z }))
+    const tubes = [
+      ...checkpointFunnelTubes(track, gate.s, gate.number),
+      ...rim.slice(1).map((end, i) => ({ start: rim[i], end, radius: .065 })),
+    ]
+    for (const { start: a, end: b, radius } of tubes) {
       const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z
       const length = Math.hypot(dx, dy, dz), norm = Math.sqrt(2 * length * (length + dy))
       world.createCollider(RAPIER.ColliderDesc.capsule(length / 2, radius)
@@ -24,7 +29,9 @@ export function attachCheckpointRacks(world: RAPIER.World, track: CourseTrack, g
       .setFriction(.05).setRestitution(0))
     const apron = track.sample(gate.s + checkpointRack.launchEnd)
     const launchGrade = (apron.y - p.y) / (checkpointRack.launchEnd - checkpointRack.barOffset)
-    return { gate, bar, launchGrade, inlet: [] as number[] }
+    const pocketSide = -track.halfWidth + checkpointRack.pocketSideInset
+    const pocket = track.sample(gate.s + checkpointRack.pocketOffset, pocketSide)
+    return { gate, bar, launchGrade, pocketSide, pocketY: pocket.y + track.radius, inlet: [] as number[] }
   })
 
   return (marbles: MarbleState[], elapsed: number, dt: number) => {
@@ -87,27 +94,31 @@ export function attachCheckpointRacks(world: RAPIER.World, track: CourseTrack, g
         const destination = earlier > along && earlier < 3.8 ? Math.max(.15, earlier - .94) : checkpointRack.seatOffset
         const forward = Math.min(3.9, Math.max(-1.1, (destination - along) * 3))
         const side = Math.min(2.9, Math.max(-2.9, (guide - lateral) * 4.4))
-        const velocity = body.linvel()
-        const grip = 1 - Math.exp(-10 * dt)
-        body.applyImpulse({
-          x: grip * (forward * tx + side * rx - velocity.x),
-          y: 0,
-          z: grip * (forward * tz + side * rz - velocity.z),
-        }, true)
-        // The belt also slows the rolling surface. A sphere brought to rest
-        // translationally with its old spin would skid forward into the gate.
-        const spin = body.angvel(), radius = track.radius, inertia = .4 * radius * radius
-        body.applyTorqueImpulse({
-          x: grip * inertia * ((forward * tz + side * rz) / radius - spin.x),
-          y: 0,
-          z: grip * inertia * (-(forward * tx + side * rx) / radius - spin.z),
-        }, true)
+        driveBelt(body, forward * tx + side * rx, forward * tz + side * rz, track.radius, dt)
       }
       const last = gate.arrivals[capacity]
-      if (last && marbles[last.id].cutAt === gate.number && gate.seated.length === capacity) {
-        gate.pocketAt ??= elapsed
+      if (last && marbles[last.id].cutAt === gate.number && gate.pocketAt === null) {
+        const body = bodies[last.id], marble = marbles[last.id]
+        const dx = marble.position.x - gate.line.x, dz = marble.position.z - gate.line.z
+        const along = dx * tx + dz * tz, lateral = dx * rx + dz * rz
+        const remaining = checkpointRack.pocketOffset - along
+        rack.inlet[capacity] ??= lateral
+        const turn = checkpointRejectTurn(along)
+        const target = rack.inlet[capacity] + (rack.pocketSide - rack.inlet[capacity]) * turn
+        if (Math.hypot(remaining, rack.pocketSide - lateral) < .25
+            && Math.abs(marble.position.y - rack.pocketY) < .12 && marble.speed < .5) {
+          body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+          body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+          body.setBodyType(RAPIER.RigidBodyType.Fixed, true)
+          marble.speed = 0
+          gate.pocketAt = elapsed
+        } else {
+          const forward = Math.max(0, Math.min(4.2, remaining * 2.6))
+          const side = Math.max(-4.3, Math.min(2, (target - lateral) * 4.8))
+          driveBelt(body, tx * forward + rx * side, tz * forward + rz * side, track.radius, dt)
+        }
       }
-      if (gate.pocketAt !== null && elapsed >= gate.pocketAt + checkpointRack.pocketTravelSeconds + .15) {
+      if (gate.pocketAt !== null && gate.seated.length === capacity && elapsed >= gate.pocketAt + checkpointRack.releaseDelay) {
         world.removeCollider(bar, true)
         for (const id of gate.seated) {
           bodies[id].setBodyType(RAPIER.RigidBodyType.Dynamic, true)
@@ -119,4 +130,15 @@ export function attachCheckpointRacks(world: RAPIER.World, track: CourseTrack, g
       }
     }
   }
+}
+
+/** Grip the moving sphere at deck level. Its vertical motion and every contact stay in Rapier. */
+function driveBelt(body: RAPIER.RigidBody, vx: number, vz: number, radius: number, dt: number) {
+  const grip = 1 - Math.exp(-10 * dt)
+  const velocity = body.linvel(), spin = body.angvel()
+  body.applyImpulse({ x: grip * (vx - velocity.x), y: 0, z: grip * (vz - velocity.z) }, true)
+  const inertia = .4 * radius * radius
+  body.applyTorqueImpulse({
+    x: grip * inertia * (vz / radius - spin.x), y: 0, z: grip * inertia * (-vx / radius - spin.z),
+  }, true)
 }

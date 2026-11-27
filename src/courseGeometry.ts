@@ -54,6 +54,8 @@ export interface Profile {
   layered?: boolean
   /** Scales the road width around its centerline, preserving the lane coordinates used by scenery. */
   widthScale?(s: number): number
+  /** Displace a widened cross-section sideways from the nominal racing line. */
+  lateralShift?(s: number): number
   /** Mold the lane guides into the running surface instead of adding upright fins. */
   roundedLaneDepth?: number
   /** Long, broad surfaces can use fewer collision samples along and across the track. */
@@ -118,7 +120,7 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
     const rx = -point.tz, rz = point.tx
     const groove = laneDepth * 0.5 * (1 + Math.cos(2 * Math.PI * (lateral + halfWidth) / laneWidth))
     const y = profile.height(s, lateral) + divider(s) * groove + 0.038 * Math.abs(lateral / halfWidth) ** 5
-    const offset = lateral * (profile.widthScale?.(s) ?? 1)
+    const offset = lateral * (profile.widthScale?.(s) ?? 1) + (profile.lateralShift?.(s) ?? 0)
     return { x: point.x + offset * rx, y, z: point.z + offset * rz, tx: point.tx, tz: point.tz, rx, rz }
   }
   const locate = (x: number, z: number, hint?: number, y?: number) => {
@@ -141,7 +143,8 @@ export function buildCourse(id: CourseId, layout: Layout, makeProfile: (pieces: 
       }
       const p = position(piece, ds)
       const dx = x - p.x, dz = z - p.z
-      const offset = (-p.tz * dx + p.tx * dz) / (profile.widthScale?.(piece.start + ds) ?? 1)
+      const s = piece.start + ds
+      const offset = (-p.tz * dx + p.tx * dz - (profile.lateralShift?.(s) ?? 0)) / (profile.widthScale?.(s) ?? 1)
       // Overlapping decks on a helix can share the same horizontal projection.
       const dy = profile.layered && y !== undefined
         ? y - (sample(piece.start + ds, clamp(offset, -halfWidth, halfWidth)).y + radius) : 0

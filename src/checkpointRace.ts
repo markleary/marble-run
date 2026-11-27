@@ -39,7 +39,7 @@ export function createCheckpointRace(track: CourseTrack, count: number,
   const nextGate = Array<number>(count).fill(0)
   const crossings: { gate: RaceCheckpoint; id: number; time: number }[] = []
 
-  function step(marbles: MarbleState[], elapsed: number, dt: number, withdraw: (id: number) => void) {
+  function step(marbles: MarbleState[], elapsed: number, dt: number) {
     crossings.length = 0
     for (const marble of marbles) {
       const gate = gates[nextGate[marble.id]]
@@ -71,7 +71,6 @@ export function createCheckpointRace(track: CourseTrack, count: number,
       if (time === null) continue
       gate.divertedAt = time
       last.cutAt = gate.number
-      withdraw(last.id)
     }
   }
   return { gates, step }

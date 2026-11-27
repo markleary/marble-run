@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import type { CourseTrack, TrackSample } from './track'
-import type { MarbleState } from './simulation'
 import type { RaceCheckpoint } from './checkpointRace'
 import { roundedLaneBands } from './courseGeometry'
 import { SceneryBatch, axisY, canvasTexture, lifted, material, signBoard, woodTexture, type Material } from './sceneryKit'
@@ -30,8 +29,6 @@ export type CourseScenery = THREE.Group & {
   setRaceTime?(seconds: number): void
   frameCamera?(camera: THREE.Camera): void
   updateStations?(gates: readonly RaceCheckpoint[] | undefined, seconds: number): void
-  showCutMarble?(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number,
-    field: readonly MarbleState[], alpha: number): boolean
 }
 
 export function createCourseScenery(track: CourseTrack, onReady?: () => void): CourseScenery {
@@ -39,7 +36,6 @@ export function createCourseScenery(track: CourseTrack, onReady?: () => void): C
   if (hasCheckpoints(track.id)) {
     const stations = createCheckpointStations(track, group)
     const updateCourse = group.updateStations
-    group.showCutMarble = stations.showCutMarble
     group.updateStations = (gates, seconds) => {
       stations.updateStations(gates, seconds)
       updateCourse?.(gates, seconds)

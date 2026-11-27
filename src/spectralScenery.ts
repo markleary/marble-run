@@ -7,6 +7,8 @@ import type { RaceCheckpoint } from './checkpointRace'
 import type { CourseTrack } from './track'
 import { SceneryBatch, axisY, canvasTexture, material, type Material } from './sceneryKit'
 import { addSpectralArena } from './spectralArena'
+import { addSpectralFan } from './spectralFanScenery'
+import { spectralFan } from './courses/spectralFan'
 
 const spectrum = ['#ff4879', '#ff9c38', '#f5df4c', '#42eca1', '#36c6ff', '#ab6aff']
 const glow = (color: string, strength = .85) => {
@@ -125,13 +127,21 @@ export function createSpectralScenery(track: CourseTrack) {
   let batch: SceneryBatch
   const ribbon = (mat: Material, start: number, end: number, left: number, right: number, h = 0, bands = 1) =>
     batch.surface(mat, start, end, (s, t) => at(s, left + (right - left) * t, h), Math.abs(right - left), bands)
-  const turnRotor = addSpectralArena(group, track, hull, rail, white)
+  addSpectralArena(group, track, hull, rail)
+  const driveFan = addSpectralFan(group, track, hull, rail, nickel)
 
-  for (const [index, section] of track.sections.entries()) {
-    const { start, end } = section
+  // The two banks either side of the fan use the usual raceway. The table
+  // owns its flared bed, drum casing and guards all the way to its two mouths.
+  const sections = track.sections.flatMap((section, index) =>
+    spectralFan.centerS > section.start && spectralFan.centerS < section.end
+      ? [{ start: section.start, end: spectralFan.startS, index }, { start: spectralFan.endS, end: section.end, index }]
+      : [{ ...section, index }])
+  for (const { start, end, index } of sections) {
     const shaft = index === 0
     batch = new SceneryBatch(shaft ? .30 : .72, { indexed: true, straightUntil: shaft ? spectralLaunch.drop : undefined })
-    ribbon(shaft ? black : track.surfaceAt((start + end) / 2) === 'glass' ? glass : deck, start, end, -w, w, 0, shaft ? 36 : 16)
+    const deckStart = start === spectralFan.endS ? start + spectralFan.runoutLength : start
+    const deckEnd = end === spectralFan.startS ? end - spectralFan.intakeLength : end
+    ribbon(shaft ? black : track.surfaceAt((start + end) / 2) === 'glass' ? glass : deck, deckStart, deckEnd, -w, w, 0, shaft ? 36 : 16)
     for (const side of [-1, 1]) {
       const edge = side * w
       // The optical sill and its slim guard follow the surface normal even as the shaft goes vertical.
@@ -174,7 +184,7 @@ export function createSpectralScenery(track: CourseTrack) {
         }, .23)
       }
     } else {
-      for (let s = start + 2, stripe = 0; s < end - 2; s += 6.4, stripe++) {
+      for (let s = deckStart + 2, stripe = 0; s < deckEnd - 2; s += 6.4, stripe++) {
         for (const side of [-1, 1]) {
           const accent = inks[(index + Math.floor(stripe / 4)) % inks.length]
           const l = side * (w - .40)
@@ -286,7 +296,7 @@ export function createSpectralScenery(track: CourseTrack) {
   const warm = new THREE.Color('#ff5790'), cool = new THREE.Color('#41d9ff'), current = new THREE.Color()
   let activeGates: readonly RaceCheckpoint[] | undefined
   const setRaceTime = (seconds: number) => {
-    turnRotor(seconds)
+    driveFan(seconds)
     for (const [i, { s, side, field }] of coils.entries()) {
       const strength = .10 + .90 * Math.max(0, spectralPolarity(field, s, seconds, activeGates) * side)
       fieldLights.setColorAt(i, current.copy(side > 0 ? warm : cool).multiplyScalar(strength))
