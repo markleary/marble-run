@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict'
-import { Group, MeshStandardMaterial, Object3D, Vector3 } from 'three'
-import { createCheckpointRejectChute } from '../src/checkpointRejectChute'
 import { compareRacePosition } from '../src/raceTiming'
 import { checkpointRack, checkpointRackSlot } from '../src/courses/checkpointRack'
-import { checkpointStations } from '../src/courses/checkpoints'
 import { FIXED_DT, RaceSimulation } from '../src/simulation'
 import type { CourseTrack } from '../src/track'
+import { watchSpectralFan } from './check-spectral'
 
 function checkPhotoCut(track: CourseTrack) {
   const race = new RaceSimulation(track, 6, 1, 'knockout')
@@ -24,17 +22,17 @@ function checkPhotoCut(track: CourseTrack) {
     for (const open of competition.gates) {
       if (open === gate) break
       for (const marble of race.marbles) cross(marble.id, open.entryS, .5)
-      competition.step(race.marbles, .5, FIXED_DT, () => assert.fail('An open gate eliminated a racer.'))
+      competition.step(race.marbles, .5, FIXED_DT)
+      assert.ok(race.marbles.every(m => m.cutAt === undefined))
     }
     for (const marble of race.marbles) cross(marble.id, gate.entryS, .8 - .1 * marble.id)
-    const withdrawn: number[] = []
-    competition.step(race.marbles, 1, FIXED_DT, id => withdrawn.push(id))
+    competition.step(race.marbles, 1, FIXED_DT)
     assert.deepEqual(gate.arrivals.map(a => a.id), [5, 4, 3, 2, 1, 0])
-    assert.deepEqual(withdrawn, [])
+    assert.ok(race.marbles.every(m => m.cutAt === undefined))
     cross(0, gate.s, .2)
     cross(1, gate.s, .8)
-    competition.step(race.marbles, 4, FIXED_DT, id => withdrawn.push(id))
-    assert.deepEqual(withdrawn, [0])
+    competition.step(race.marbles, 4, FIXED_DT)
+    assert.deepEqual(race.marbles.filter(m => m.cutAt !== undefined).map(m => m.id), [0])
     assert.equal(race.marbles[1].rackSlot, 4)
   } finally {
     race.dispose()
@@ -54,8 +52,6 @@ function checkLoadingRacks(track: CourseTrack, race: RaceSimulation) {
     }
     if (gate.phase !== 'loading') continue
     const capacity = gate.field - 1
-    if (gate.pocketAt !== null) assert.equal(gate.seated.length, capacity,
-      'The last entrant must wait in the side guide until the qualifiers are all seated.')
     const qualifiers = gate.arrivals.slice(0, capacity).map(crossing => race.marbles[crossing.id])
     for (const [slot, marble] of qualifiers.entries()) {
       assert.equal(marble.stagingAt, gate.number)
@@ -103,7 +99,7 @@ function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
           through.add(marble.id)
         }
       }
-      if (gate.pocketAt !== null) {
+      if (gate.releasedAt !== null) {
         assert.equal(gate.seated.length, gate.field - 1)
         assert.equal(through.size, gate.field)
         index++
@@ -120,33 +116,44 @@ function watchEntranceOrder(track: CourseTrack, race: RaceSimulation) {
   }
 }
 
-/** Reproduce the displayed cut pose against interpolated qualifying bodies without a GPU. */
-function checkChuteClearance(track: CourseTrack) {
-  const material = new MeshStandardMaterial()
-  const fixtures = checkpointStations(track.id, track.sections).map(({ s }) =>
-    createCheckpointRejectChute(track, s, new Group(), { rubber: material, stripe: material, chrome: material, label: material }))
-  const cut = new Object3D(), qualifier = new Vector3()
-  return (race: RaceSimulation) => {
-    for (const gate of race.competition!.gates) {
-      if (gate.divertedAt === null || gate.releasedAt !== null && race.elapsed > gate.releasedAt + .3) continue
-      const last = race.marbles[gate.arrivals[gate.field - 1].id]
-      for (const alpha of [.5, 1]) {
-        const time = race.elapsed - (1 - alpha) * FIXED_DT
-        fixtures[gate.number - 1].roll(cut, last, time, gate.divertedAt, gate.pocketAt, race.marbles, alpha)
-        for (let i = 0; i < gate.field - 1; i++) {
-          const marble = race.marbles[gate.arrivals[i].id]
-          qualifier.lerpVectors(marble.previousPosition, marble.position, alpha)
-          assert.ok(cut.position.distanceTo(qualifier) >= 2 * track.radius - .004,
-            `Cut marble passed through a qualifier at CP ${gate.number}, seed ${race.seed}, time ${time}.`)
-        }
-      }
+/** Follow the actual rolling body around the switch and into its pocket. */
+function watchSidePockets(track: CourseTrack, race: RaceSimulation) {
+  const cuts = race.competition!.gates.filter(g => g.cut).map(gate => ({
+    gate, furthest: -Infinity, onBelt: false,
+  }))
+  let current = 0
+  return () => {
+    const cut = cuts[current]
+    if (!cut || cut.gate.divertedAt === null) return
+    const { gate } = cut
+    const marble = race.marbles[gate.arrivals[gate.field - 1].id]
+    const dx = marble.position.x - gate.line.x, dz = marble.position.z - gate.line.z
+    const along = dx * gate.line.tx + dz * gate.line.tz, side = dx * gate.line.rx + dz * gate.line.rz
+    const label = track.id + ' seed ' + race.seed + ' field ' + gate.field + ' CP ' + gate.number
+    cut.furthest = Math.max(cut.furthest, along)
+    // Allow ordinary sphere contact at the fork, but reject an upstream return.
+    assert.ok(cut.furthest - along < track.radius, label + ' pulled the last marble back toward the throat.')
+    for (const other of race.marbles) {
+      if (other.cutAt !== undefined) continue
+      const a = marble.position, b = other.position
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) >= 1.8 * track.radius,
+        label + ' passed through another racer on the switch belt.')
     }
+    if (!cut.onBelt && side < -checkpointRack.throatHalfWidth && race.rollingSurface(marble, 'support')) cut.onBelt = true
+    if (gate.pocketAt === null) {
+      assert.ok(race.elapsed - gate.divertedAt! < 8, label + ' did not collect the last marble.')
+      return
+    }
+    const cup = track.sample(gate.s + checkpointRack.pocketOffset, -track.halfWidth + checkpointRack.pocketSideInset)
+    assert.ok(cut.onBelt, label + ' must roll sideways on the deck into the trap.')
+    assert.ok(Math.hypot(marble.position.x - cup.x, marble.position.z - cup.z) < .27
+      && Math.abs(marble.position.y - cup.y - track.radius) < .12, label + ' missed the ground-level pocket.')
+    current++
   }
 }
 
 export function checkCheckpointKnockouts(track: CourseTrack, firstSeed: number, repetitions: number) {
   checkPhotoCut(track)
-  const checkChute = checkChuteClearance(track)
   // These two six-wide approaches previously carried a racer over CP1's outer rail.
   for (const seed of track.id === 'crux' ? [295, 375] : []) {
     const race = new RaceSimulation(track, 6, seed, 'knockout')
@@ -165,19 +172,24 @@ export function checkCheckpointKnockouts(track: CourseTrack, firstSeed: number, 
   for (let count = 2; count <= track.laneCount; count++) {
     const winners: number[] = []
     const wins = Array<number>(track.laneCount).fill(0)
+    let fanCrossings = 0
     for (let seed = firstSeed; seed < firstSeed + repetitions; seed++) {
       const race = new RaceSimulation(track, count, seed, 'knockout')
       try {
         const entrances = watchEntranceOrder(track, race)
+        const checkPocket = watchSidePockets(track, race)
+        const fan = track.id === 'spectral' ? watchSpectralFan(track, race) : undefined
         race.release()
         while (!race.finished && !race.failure) {
           race.step()
           entrances.observe()
-          checkChute(race)
+          fan?.observe()
+          checkPocket()
           if (seed === firstSeed) checkLoadingRacks(track, race)
         }
         assert.ok(race.finished, `${track.id} knockout with ${count} racers, seed ${seed}: ${race.failure}`)
         entrances.verify()
+        if (fan) fanCrossings += fan.verify()
         const order = [...race.marbles].sort(compareRacePosition)
         const cuts = Math.min(count - 2, race.competition!.gates.length)
         assert.equal(order.filter(m => m.finishTime !== null).length, count - cuts)
@@ -198,7 +210,7 @@ export function checkCheckpointKnockouts(track: CourseTrack, firstSeed: number, 
             assert.ok(gate.releasedAt !== null && gate.releasedAt > last.time)
             assert.ok(gate.divertedAt !== null && gate.divertedAt > last.time)
             assert.ok(gate.pocketAt !== null && gate.pocketAt >= gate.divertedAt)
-            assert.ok(gate.pocketAt !== null && gate.releasedAt >= gate.pocketAt + checkpointRack.pocketTravelSeconds)
+            assert.ok(gate.pocketAt !== null && gate.releasedAt >= gate.pocketAt + checkpointRack.releaseDelay)
             assert.deepEqual(new Set(gate.seated), new Set(gate.arrivals.slice(0, -1).map(a => a.id)))
             assert.equal(order[gate.field - 1].id, last.id)
             assert.equal(order[gate.field - 1].cutAt, i + 1)
@@ -216,6 +228,7 @@ export function checkCheckpointKnockouts(track: CourseTrack, firstSeed: number, 
       }
     }
     console.log(JSON.stringify({ course: track.id, format: 'knockout', count, heats: repetitions, winningSlots: wins,
+      ...(track.id === 'spectral' && { fanCrossings }),
       winningSeconds: [Math.min(...winners), Math.max(...winners)].map(t => +t.toFixed(2)) }))
   }
 }

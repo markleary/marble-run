@@ -121,6 +121,7 @@ async function landmarkTimes(id, seed, sections, format = 'endurance') {
   try {
     if (id === 'spectral' && format === 'endurance') {
       marks.push(['Freefall', spectralLayout.launch.drop / 2]);
+      marks.push(['Fan entry', spectralLayout.fan.startS + 1], ['Fan exit', spectralLayout.fan.endS - 1]);
       for (const gate of heat.competition.gates) marks.push([gate.name, gate.entryS + 1]);
     }
     marks.sort((a, b) => a[1] - b[1]);
@@ -139,6 +140,8 @@ async function landmarkTimes(id, seed, sections, format = 'endurance') {
         if (gate.seated.length === gate.field - 1 && gate.releasedAt === null) times.Rack ??= heat.elapsed;
       }
       assert.ok(times.Rack && gate.releasedAt !== null, 'All qualifying marbles must reach the rack before release.');
+      assert.ok(gate.divertedAt !== null && gate.pocketAt > gate.divertedAt, 'The cut marble must roll through the side branch.');
+      times.Pocket = (gate.divertedAt + gate.pocketAt) / 2;
       times.Rack = (times.Rack + gate.releasedAt) / 2;
       times.Release = gate.releasedAt + .5;
     }
@@ -501,9 +504,10 @@ try {
     ['Crux Mountain Masters', 'crux', [
       [jumpShots.crux, 'headwall-gap'],
       [clock(crux['Chalk Velodrome']), 'chalk-velodrome'],
+      [clock(crux.Pocket), 'side-pocket'],
       [clock(crux.Rack), 'qualification-rack'],
       [clock(crux.Release), 'gate-release'],
-    ]],
+    ].sort(([a], [b]) => clockSeconds(a) - clockSeconds(b))],
     ['Spectral Relay', 'spectral', Object.entries(spectral).map(([name, time]) => [clock(time), name.toLowerCase().replaceAll(' ', '-')])],
     ['Afterglow FM', 'afterglow', [
       ['0:03.00', 'launch'],
@@ -561,7 +565,7 @@ try {
       await page.evaluate(() => { delete window.playtestActionShot; });
     }
     for (const [time, shot] of shots) {
-      const freeze = id === 'spectral' || time === jumpShots[id] || shot === 'qualification-rack' || shot === 'gate-release';
+      const freeze = id === 'spectral' || time === jumpShots[id] || ['side-pocket', 'qualification-rack', 'gate-release'].includes(shot);
       if (freeze) {
         const approach = clock(Math.max(0, clockSeconds(time) - 1));
         await page.evaluate(spec => { window.playtestActionShot = spec; }, { approach, target: time });

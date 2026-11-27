@@ -2,6 +2,7 @@ import { buildCourse, clamp, ease, type CollisionMesh, type CourseTrack, type Pr
 import layout from './spectral-layout.json'
 import type { RaceCheckpoint } from '../checkpointRace'
 import { checkpointRack } from './checkpointRack'
+import { spectralFan, spectralFanLateralShift, spectralFanWidthScale } from './spectralFan'
 
 export const spectralLaunch = layout.launch
 export const spectralFields = layout.fields
@@ -11,6 +12,14 @@ const exitAngle = Math.atan2(1, exitGrade)
 const { halfWidth, sections } = layout
 const galleryRuns = layout.runs.slice(1)
 const galleryLength = galleryRuns.reduce((sum, run) => sum + run.length, 0)
+
+/** Distance under a grade that ramps smoothly from zero to one over 3 units. */
+function rampDrop(distance: number) {
+  if (distance <= 0) return 0
+  if (distance >= 3) return distance - 1.5
+  const t = distance / 3
+  return 3 * t ** 3 * (1 - .5 * t)
+}
 
 /** North and south poles exchange strength with the race clock. Both the rail
  * lights and the lateral impulse use this exact travelling wave. */
@@ -30,14 +39,23 @@ export function spectralOffset(s: number) {
 
 function galleryProfile(): Profile {
   const grade = .039, bank = .57, transitionDrop = 1.35
+  const fanGrade = spectralFan.grade - grade
+  // Carry the table's descent into the exit bank so a racer deflected by the
+  // rotor can regain speed before the long magnetic straight.
+  const fanDrop = (s: number) => fanGrade
+    * (rampDrop(s - spectralFan.startS + 3) - rampDrop(s - spectralFan.endS - 30))
+  const inverter = spectralFields[1]
   const apronDrop = (exitGrade - grade) * 16
   const top = 3 + galleryLength * grade + apronDrop + layout.bends.length * 2 * transitionDrop
+    + fanGrade * (spectralFan.endS - spectralFan.startS + 3)
   const blendLength = 9
   return {
     openStart: true,
     layered: true,
     roundedLaneDepth: .14,
     collisionResolution: { rowSpacing: .66, bandsPerLane: 4 },
+    widthScale: d => spectralFanWidthScale(d + catchEnd),
+    lateralShift: d => spectralFanLateralShift(d + catchEnd),
     divider: d => 1 - ease(4, 19, d),
     // A marble can climb the full outside shoulder after a fast change of
     // direction. Open guards rise through each bend and taper into its runout.
@@ -47,6 +65,12 @@ function galleryProfile(): Profile {
       for (const bend of layout.bends) {
         if (s < bend.start - 12) break
         guard = Math.max(guard, ease(bend.start - 12, bend.start, s) - ease(bend.end, bend.end + 12, s))
+      }
+      // The traveling field can drive a packed group sideways into the wall.
+      // Catch a marble riding up over its neighbors while the coils still pull.
+      for (const field of spectralFields) {
+        const active = ease(field.start - 6, field.start, s) - ease(field.end, field.end + 6, s)
+        guard = Math.max(guard, .65 * active)
       }
       return 1.5 + 3.5 * guard
     },
@@ -69,7 +93,10 @@ function galleryProfile(): Profile {
         descent += entry + exit
       }
       const across = lateral / halfWidth
-      return top - grade * d - apronDrop * (1 - Math.exp(-d / 16))
+      // Preserve forward roll through the stronger reversals on the inverter,
+      // including a slow pack restarting from Flywheel Bend.
+      const inverterDrop = .032 * (rampDrop(s - inverter.start + 3) - rampDrop(s - inverter.end))
+      return top - grade * d - apronDrop * (1 - Math.exp(-d / 16)) - fanDrop(s) - inverterDrop
         - transitionDrop * descent + cant * bank * lateral
         + shoulder * (.68 * across ** 2 + .92 * across ** 6)
     },

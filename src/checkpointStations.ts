@@ -4,7 +4,6 @@ import { checkpointStations } from './courses/checkpoints'
 import { checkpointFunnelRails, checkpointFunnelTubes, checkpointRack, checkpointRackSlot } from './courses/checkpointRack'
 import { spectralGateColors } from './courses/spectralCheckpoints'
 import { createCheckpointRejectChute } from './checkpointRejectChute'
-import type { MarbleState } from './simulation'
 import type { RaceCheckpoint } from './checkpointRace'
 import type { CourseTrack } from './track'
 import { SceneryBatch, canvasTexture, lifted, material } from './sceneryKit'
@@ -65,15 +64,15 @@ export function createCheckpointStations(track: CourseTrack, group: THREE.Group)
     const p = track.sample(s)
     const normal = new THREE.Vector3(p.tx, 0, p.tz), across = new THREE.Vector3(p.rx, 0, p.rz)
     const yaw = Math.atan2(p.tx, p.tz)
-    // An overhead blade names the checkpoint from either direction. The two skinny
-    // legs stand outside the playfield, leaving a clear view of the row and throat.
-    const signAt = at(.85, 0, 2.18), boardWidth = 5.45, boardHeight = 1.48
-    const center = at(.85, 0)
-    signAt.y = Math.max(center.y, at(.85, width).y, at(.85, -width).y) + 2.26
+    // Place the overhead sign before the fork so the rack camera can see the
+    // last marble turn into the side pocket beneath it.
+    const signOffset = -2.4, boardWidth = 5.45, boardHeight = 1.48
+    const signAt = at(signOffset, 0)
+    signAt.y = Math.max(signAt.y, at(signOffset, width).y, at(signOffset, -width).y) + 2.26
     frame.add(graphite, new RoundedBoxGeometry(boardWidth + .20, boardHeight + .18, .23, 2, .11),
       new THREE.Matrix4().makeRotationY(yaw).setPosition(signAt))
     for (const side of [-1, 1]) {
-      const foot = at(.85, side * (width + .14), -.21), top = foot.clone(); top.y = signAt.y
+      const foot = at(signOffset, side * (width + .14), -.21), top = foot.clone(); top.y = signAt.y
       frame.rod(graphite, foot, top, .095)
       frame.rod(chrome, top, signAt.clone().addScaledVector(across, side * boardWidth / 2), .083)
       frame.rod(paint, top.clone().addScaledVector(worldUp, -.62), top.clone().addScaledVector(worldUp, -.21), .118)
@@ -201,7 +200,7 @@ export function createCheckpointStations(track: CourseTrack, group: THREE.Group)
       }
       seatBatch.finish(slots); barBatch.finish(bar)
     }
-    const reject = createCheckpointRejectChute(track, s, machine, { rubber, stripe: red, chrome, label: outLabel })
+    createCheckpointRejectChute(track, s, machine, { rubber, stripe: red, chrome, label: outLabel })
     metalwork.finish(machine); pass.finish(bypass)
     machine.add(slots, bar); group.add(machine, bypass)
     const ctx = (map.image as HTMLCanvasElement).getContext('2d')!
@@ -213,7 +212,6 @@ export function createCheckpointStations(track: CourseTrack, group: THREE.Group)
       const seated = gate?.seated.length ?? 0
       machine.visible = count > 0; bypass.visible = count === 0
       rebuildSeats(count)
-      reject.jetLights.visible = gate?.divertedAt != null && seconds >= gate.divertedAt && !released
       // Retract the gate into the bed, leaving the line visible as the pack launches.
       const progress = releasedAt === null ? 0 : THREE.MathUtils.smoothstep(seconds - releasedAt, 0, .24)
       bar.position.y = -.93 * progress
@@ -224,19 +222,12 @@ export function createCheckpointStations(track: CourseTrack, group: THREE.Group)
       stationFace(ctx, 'Checkpoint ' + number, accent, count, seated, released)
       map.needsUpdate = true; labelState = label
     }
-    return { number, update, roll: reject.roll }
+    return { number, update }
   })
   frame.finish(group)
   return {
     updateStations(gates: readonly RaceCheckpoint[] | undefined, seconds: number) {
       for (const station of stations) station.update(gates?.find(g => g.number === station.number), seconds)
-    },
-    showCutMarble(mesh: THREE.Object3D, marble: MarbleState, gate: RaceCheckpoint, seconds: number,
-      field: readonly MarbleState[], alpha: number) {
-      const last = gate.arrivals[gate.field - 1]
-      if (last?.id !== marble.id || gate.divertedAt === null) return false
-      stations[gate.number - 1].roll(mesh, marble, seconds, gate.divertedAt, gate.pocketAt, field, alpha)
-      return true
     },
   }
 }

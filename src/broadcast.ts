@@ -15,7 +15,7 @@ import keplerNebula from './assets/kepler-nebula.jpg';
 import { createKeplerTrails } from './keplerTrails';
 import { keplerStars } from './keplerStars';
 import { spectralPaint, spectralReflections } from './spectralMarbles';
-import { spectralTurbine } from './spectralArena';
+import { spectralFan, spectralFanFrame } from './courses/spectralFan';
 import { spectralOffset } from './courses/spectral';
 import { spectralDial } from './courses/spectralCheckpoints';
 
@@ -209,7 +209,7 @@ export class RaceBroadcast {
   private gate = new THREE.Group();
   private scenery?: CourseScenery;
   private trails?: ReturnType<typeof createKeplerTrails>;
-  private turbine?: ReturnType<typeof spectralTurbine>;
+  private fanView?: { focus: THREE.Vector3; bounds: THREE.Vector3[] };
   private reflections?: ReturnType<typeof spectralReflections>;
   private previewCenter = new THREE.Vector3();
   private cameraRight = new THREE.Vector3();
@@ -299,7 +299,18 @@ export class RaceBroadcast {
     this.scenery = createCourseScenery(track, redraw);
     if (track.id === 'kepler') this.scenery.add(keplerStars(this.renderer.getPixelRatio()));
     this.trails = track.id === 'kepler' ? createKeplerTrails(this.scenery, track) : undefined;
-    this.turbine = track.id === 'spectral' ? spectralTurbine(track) : undefined;
+    this.fanView = undefined;
+    if (track.id === 'spectral') {
+      const { center } = spectralFanFrame(track);
+      const nearRim = track.sample(spectralFan.centerS, -track.halfWidth);
+      const farHub = new THREE.Vector3(center.x + center.rx * spectralFan.hubRadius,
+        center.y + spectralFan.hubHeight, center.z + center.rz * spectralFan.hubRadius);
+      this.fanView = {
+        focus: new THREE.Vector3().copy(center).lerp(nearRim, .35),
+        bounds: [track.sample(spectralFan.startS - .5), track.sample(spectralFan.endS + .5), nearRim, farHub]
+          .map(p => new THREE.Vector3(p.x, p.y + track.radius, p.z)),
+      };
+    }
     this.reflections = track.id === 'spectral' ? spectralReflections(this.scenery, track) : undefined;
     this.scene.add(this.scenery);
     this.gate = new THREE.Group();
@@ -479,11 +490,6 @@ export class RaceBroadcast {
     for (const marble of marbles) {
       const mesh = this.balls[marble.id];
       this.displayDistances[marble.id] = THREE.MathUtils.lerp(marble.previousDistance, marble.distance, alpha);
-      if (marble.cutAt !== undefined) {
-        const gate = gates?.find(g => g.number === marble.cutAt);
-        mesh.visible = !!gate && !!this.scenery?.showCutMarble?.(mesh, marble, gate, displayTime, marbles, alpha);
-        continue;
-      }
       mesh.visible = true;
       mesh.position.set(marble.previousPosition.x, marble.previousPosition.y, marble.previousPosition.z)
         .lerp(marble.position, alpha);
@@ -553,8 +559,9 @@ export class RaceBroadcast {
     const jump = this.track.id === 'crux' && cruxJumps.find(j => lead >= j.rampStart - 2 && lead <= j.catchEnd);
     const board = this.track.id === 'crux' && cruxObstacleBoards.find(b => lead >= b.start - 2 && center <= b.end + 1.3);
     const split = this.track.id === 'spectral' && gates?.find(g => !g.cut && lead >= g.entryS - 9 && lead <= g.entryS + 4.8);
-    const carousel = this.turbine && this.track.sections[2];
-    const arc = carousel ? (lead - carousel.start) / (carousel.end - carousel.start) : 0;
+    const fanRiders = this.fanView && lead >= spectralFan.startS - 3 && lead <= spectralFan.endS + spectralFan.runoutLength
+      ? running.filter(m => distances[m.id] >= spectralFan.startS - 3 && distances[m.id] <= spectralFan.endS + 2)
+      : undefined;
     if (station) {
       feature = 'gate-' + station.number;
       // Stay on the actual timing stripe through the last entrance, including a close finish.
@@ -565,21 +572,27 @@ export class RaceBroadcast {
       const near = loading ? station.s - .9 : station.entryS - 3.2;
       const anchor = this.track.sample(loading ? station.s + 2.9 : (far + near) / 2);
       this.focusGoal.set(anchor.x, anchor.y + .98, anchor.z);
-      const along = this.camera.aspect < .8 ? 7.4 : 9.7;
-      const side = this.camera.aspect < .8 ? -8.6 : -4.6;
-      offset = [anchor.tx * along + anchor.rx * side, loading ? 5.7 : 8.0, anchor.tz * along + anchor.rz * side];
+      const portrait = this.camera.aspect < .8;
+      // Look back from the release bar so the side branch crosses the screen.
+      const [along, height, side] = loading ? [9.7, 9.1, portrait ? -.9 : -2.5]
+        : [portrait ? 7.4 : 9.7, 8.0, portrait ? -8.6 : -4.6];
+      offset = [anchor.tx * along + anchor.rx * side, height, anchor.tz * along + anchor.rz * side];
       featureFrame = [near, far].flatMap(s => [-1, 1].map(side => {
         const p = this.track.sample(s, side * (loading ? this.track.halfWidth - .32 : this.track.halfWidth - .17));
-        return new THREE.Vector3(p.x, p.y + (loading && s === near ? 3.1 : .55), p.z);
+        return new THREE.Vector3(p.x, p.y + .55, p.z);
       }));
-    } else if (this.turbine && arc >= .32 && arc <= .66) {
-      // A short establishing shot keeps the turbine and the racers in the same frame.
-      feature = 'carousel';
-      this.focusGoal.lerp(this.turbine.hub, .39);
-      offset = [-3 * p.tx - 15 * p.rx, 26, -3 * p.tz - 15 * p.rz];
-      featureFrame = [...pack.map(m => this.balls[m.id].position),
-        new THREE.Vector3(this.turbine.hub.x + .55 * this.turbine.fanRadius * p.rx,
-          this.turbine.hub.y, this.turbine.hub.z + .55 * this.turbine.fanRadius * p.rz)];
+    } else if (this.fanView && fanRiders?.length) {
+      feature = 'fan-deck';
+      // Hold the stationary mouths and the traveling pockets in one shot.
+      // Looking back up the chute in portrait puts the long crossing up the screen.
+      const line = this.track.sample(spectralFan.centerS);
+      const portrait = this.camera.aspect < .8;
+      const along = spectralFan.radius * (portrait ? .92 : .48);
+      const side = spectralFan.radius * (portrait ? .08 : .65);
+      offset = [along * line.tx + side * line.rx, spectralFan.radius * (portrait ? 2.25 : 2.40),
+        along * line.tz + side * line.rz];
+      this.focusGoal.copy(this.fanView.focus);
+      featureFrame = [...this.fanView.bounds, ...fanRiders.map(m => this.balls[m.id].position)];
     } else if (split) {
       feature = split.name;
       const line = split.entryLine, sign = this.track.sample(split.entryS, -this.track.halfWidth - spectralDial.shoulderOffset);

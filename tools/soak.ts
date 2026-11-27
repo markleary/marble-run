@@ -11,7 +11,7 @@ import { checkAfterglow } from './check-afterglow';
 import { checkCheckpointKnockouts } from './check-checkpoints';
 import { checkpointCount } from '../src/courses/checkpoints';
 import { cruxJumps } from '../src/courses/crux';
-import { checkSpectralMechanics } from './check-spectral';
+import { checkSpectralMechanics, watchSpectralFan } from './check-spectral';
 import { orreryJumps } from '../src/courses/orreryJumps';
 import { checkOrreryCrossing } from './check-orrery';
 import { checkCourseJumps } from './check-jumps';
@@ -56,6 +56,7 @@ function exerciseField(track: CourseTrack, count: number) {
   const branchStarts = [0, 0], branchWins = [0, 0];
   const forkExit = track.id === 'wireworks' ? track.sample(wireworksLayout.forkEnd) : undefined;
   const mixed = { branches: ['slateLower', 'aquaUpper'], heats: 0, mergeLeads: [0, 0], wins: [0, 0] };
+  let fanCrossings = 0;
   let replayFinishTimes: (number | null)[] | undefined;
 
   for (let i = 0; i < repetitions; i++) {
@@ -73,9 +74,11 @@ function exerciseField(track: CourseTrack, count: number) {
       const branches = new Map<number, number>();
       let mergeLeader: number | undefined;
       const transfer = track.id === 'kepler' ? measureKeplerTransfer(race) : undefined;
+      const fan = track.id === 'spectral' ? watchSpectralFan(track, race) : undefined;
       while (!race.finished && !race.failure) {
         race.step();
         transfer?.observe();
+        fan?.observe();
         if (branchCenter && branchMidpoint !== undefined && branches.size < count) {
           for (const marble of race.marbles) {
             if (marble.distance < branchMidpoint || branches.has(marble.id)) continue;
@@ -96,6 +99,7 @@ function exerciseField(track: CourseTrack, count: number) {
           marbles: race.marbles.map(m => ({ slot: m.slot, s: +m.distance.toFixed(2), speed: +m.speed.toFixed(2) })),
         }));
       } else {
+        if (fan) fanCrossings += fan.verify();
         const finishers = [...race.marbles].sort((a, b) => a.finishTime! - b.finishTime!);
         for (const marble of finishers) {
           assert.ok(Number.isFinite(marble.finishTime) && marble.finishTime! > 0 && marble.finishTime! <= race.elapsed);
@@ -166,6 +170,7 @@ function exerciseField(track: CourseTrack, count: number) {
       [track.id === 'crux' ? 'winningSeconds' : 'winnerSeconds']: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
     }),
     ...(branchCenter && { branchStarts, branchWins }),
+    ...(track.id === 'spectral' && { fanCrossings }),
     ...(forkExit && { mixedBranchHeats: mixed }),
     ...(transferSeconds.length && {
       transfers: transferSeconds.length,

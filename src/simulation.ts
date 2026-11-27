@@ -3,6 +3,8 @@ import type { CourseTrack, CourseSurface } from './track';
 import { spectralFields, spectralOffset, spectralPolarity } from './courses/spectral';
 import { attachOrreryDrive } from './orreryDrive';
 import { attachAfterglowDrive } from './afterglowDrive';
+import { attachSpectralFan } from './spectralFanDrive';
+import { spectralFan } from './courses/spectralFan';
 import { attachCheckpointRacks } from './checkpointRackDrive';
 import { checkpointStations } from './courses/checkpoints';
 import { createCheckpointRace, type CheckpointFormat } from './checkpointRace';
@@ -120,6 +122,7 @@ export class RaceSimulation {
     const stations = checkpointStations(track.id, track.sections);
     if (stations.length) this.competition = createCheckpointRace(track, entrantCount, stations, format);
     if (track.id === 'spectral') {
+      this.advanceDrive = attachSpectralFan(this.world, track, collider => this.surfaceByCollider.set(collider.handle, 'alloy'));
       this.fastOpening = track.startS < track.sections[1].end;
       // Resume travel after an impact with the curved receiver within the same
       // fixed tick. A single CCD substep discards the remaining motion at contact.
@@ -164,7 +167,6 @@ export class RaceSimulation {
   }
 
   rollingSurface(marble: MarbleState, contact: 'any' | 'support' = 'any'): CourseSurface | undefined {
-    if (marble.cutAt !== undefined) return undefined;
     const ball = this.bodies[marble.id].collider(0);
     const preferred = this.track.surfaceAt(marble.distance);
     let result: CourseSurface | undefined;
@@ -189,7 +191,7 @@ export class RaceSimulation {
     this.impacts.length = 0;
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
     this.advanceDrive?.((this.tick + 1) * FIXED_DT);
-    if (this.track.id === 'spectral') this.pulseFields();
+    if (this.track.id === 'spectral') this.driveSpectralTrack();
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
@@ -197,7 +199,7 @@ export class RaceSimulation {
       this.fastOpening = false;
       this.world.maxCcdSubsteps = 1;
     }
-    this.competition?.step(this.marbles, this.elapsed, FIXED_DT, this.withdraw);
+    this.competition?.step(this.marbles, this.elapsed, FIXED_DT);
     this.driveRacks?.(this.marbles, this.elapsed, FIXED_DT);
     this.events.drainContactForceEvents(event => {
       const id = this.idByCollider.get(event.collider1()) ?? this.idByCollider.get(event.collider2());
@@ -211,10 +213,23 @@ export class RaceSimulation {
     return this.impacts;
   }
 
-  private pulseFields() {
+  private driveSpectralTrack() {
     for (const marble of this.marbles) {
       if (marble.cutAt !== undefined) continue;
-      const field = spectralFields.find(f => marble.distance >= f.start && marble.distance <= f.end);
+      const s = marble.distance;
+      const intake = s >= spectralFan.startS - spectralFan.intakeLength && s < spectralFan.startS;
+      const runout = s > spectralFan.endS && s <= spectralFan.endS + spectralFan.runoutLength;
+      if ((intake || runout) && this.rollingSurface(marble, 'support')) {
+        // The intake meters the pack into the open pocket. The discharge belt
+        // gathers the sideways momentum after the vanes release the marble.
+        const { tx, tz } = this.track.sample(s);
+        const body = this.bodies[marble.id], v = body.linvel();
+        const target = intake ? spectralFan.intakeSpeed : spectralFan.runoutSpeed;
+        const dx = target * tx - v.x, dz = target * tz - v.z;
+        const scale = Math.min(1, 6.8 * FIXED_DT / Math.max(.001, Math.hypot(dx, dz)));
+        body.applyImpulse({ x: dx * scale, y: 0, z: dz * scale }, true);
+      }
+      const field = spectralFields.find(f => s >= f.start && s <= f.end);
       if (!field) continue;
       const impulse = 4.2 * spectralPolarity(field, marble.distance, this.elapsed, this.competition?.gates) * FIXED_DT;
       if (impulse === 0) continue;
@@ -232,7 +247,6 @@ export class RaceSimulation {
 
   private syncBodies(): void {
     for (const marble of this.marbles) {
-      if (marble.cutAt !== undefined) continue;
       const body = this.bodies[marble.id];
       marble.previousPosition = marble.position;
       marble.previousRotation = marble.rotation;
@@ -241,6 +255,10 @@ export class RaceSimulation {
       marble.rotation = body.rotation();
       const velocity = body.linvel();
       marble.speed = Math.hypot(velocity.x, velocity.y, velocity.z);
+      if (marble.cutAt !== undefined) {
+        marble.distance = this.track.locate(marble.position.x, marble.position.z, marble.distance, marble.position.y).s;
+        continue;
+      }
       if (!this.finished && marble.finishTime === null) this.updateProgress(marble);
       // The receiving bed damps both translation and roll after the entire
       // sphere has cleared the timing stripe. The result is already locked.
@@ -255,12 +273,6 @@ export class RaceSimulation {
       }
     }
   }
-
-  private withdraw = (id: number) => {
-    const body = this.bodies[id];
-    this.idByCollider.delete(body.collider(0).handle);
-    this.world.removeRigidBody(body);
-  };
 
   private updateProgress(marble: MarbleState) {
     const { track, finishLine } = this;

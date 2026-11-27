@@ -40,8 +40,8 @@ export const courses = {
   },
   spectral: {
     title: 'Spectral Relay',
-    averageSeconds: 152.1,
-    features: ['2+ min', 'Vertical drop', 'Magnetic fields', 'Knockout gates'],
+    averageSeconds: 155.0,
+    features: ['2+ min', 'Vertical drop', 'Spinning fan', 'Magnetic fields', 'Knockout gates'],
   },
   crux: {
     title: 'Crux Mountain Masters',
