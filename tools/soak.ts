@@ -15,7 +15,7 @@ import { checkSpectralMechanics, watchSpectralFan } from './check-spectral';
 import { orreryJumps } from '../src/courses/orreryJumps';
 import { checkOrreryCrossing } from './check-orrery';
 import { checkCourseJumps } from './check-jumps';
-import { initPhysics, RaceSimulation } from '../src/simulation';
+import { FIXED_DT, initPhysics, RaceSimulation } from '../src/simulation';
 import type { MarbleState } from '../src/simulation';
 
 const repetitions = Number(process.argv[2] ?? 100);
@@ -42,6 +42,22 @@ function firstBranchAcrossExit(exit: TrackSample, marbles: MarbleState[], branch
     }
   }
   return leader;
+}
+
+/** A marble must cover the distance its velocity implies in each tick. A body held
+ * at a predicted impact keeps its speed and stands almost still. A real impact does
+ * that for one tick. A marble rolling under swept CCD repeats it many times a second. */
+function heldMarbles(marbles: MarbleState[], speedBefore: number[]) {
+  let held = 0;
+  for (const marble of marbles) {
+    const from = marble.previousPosition, to = marble.position;
+    const travel = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+    const expected = Math.min(speedBefore[marble.id], marble.speed) * FIXED_DT;
+    // A pile-up in the catch tray can reverse a finished marble within one tick.
+    if (marble.finishTime === null && expected > .02 && travel < .5 * expected) held++;
+    speedBefore[marble.id] = marble.speed;
+  }
+  return held;
 }
 
 function exerciseField(track: CourseTrack, count: number) {
@@ -75,8 +91,11 @@ function exerciseField(track: CourseTrack, count: number) {
       let mergeLeader: number | undefined;
       const transfer = track.id === 'kepler' ? measureKeplerTransfer(race) : undefined;
       const fan = track.id === 'spectral' ? watchSpectralFan(track, race) : undefined;
+      const speedBefore = Array<number>(count).fill(0);
+      let held = 0;
       while (!race.finished && !race.failure) {
         race.step();
+        held += heldMarbles(race.marbles, speedBefore);
         transfer?.observe();
         fan?.observe();
         if (branchCenter && branchMidpoint !== undefined && branches.size < count) {
@@ -93,6 +112,7 @@ function exerciseField(track: CourseTrack, count: number) {
           mergeLeader = firstBranchAcrossExit(forkExit, race.marbles, branches);
         }
       }
+      assert.ok(held <= 5, `${track.id}, seed ${seed}, field ${count}: moving marbles stood still for ${held} ticks.`);
       if (race.failure) {
         console.error(JSON.stringify({
           course: track.id, count, seed, problem: race.failure, time: race.elapsed,
