@@ -8,6 +8,7 @@ import { buildTideglassTrack } from './courses/tideglass'
 import { buildSpectralTrack } from './courses/spectral'
 import { buildCruxTrack } from './courses/crux'
 import { buildAfterglowTrack } from './courses/afterglow'
+import { buildSantaTrack } from './courses/santa'
 import type { CourseId } from './courses/catalog'
 
 import { bankAt, buildCourse, clamp, ease, launchTrim } from './courseGeometry'
@@ -72,5 +73,6 @@ const builders = {
   prism: buildPrismTrack, frostline: buildFrostlineTrack, timber: buildTimberTrack,
   wireworks: buildWireworksTrack, orrery: buildOrreryTrack, tideglass: buildTideglassTrack,
   kepler: buildKeplerTrack, crux: buildCruxTrack, spectral: buildSpectralTrack, afterglow: buildAfterglowTrack,
+  santa: buildSantaTrack,
 }
 export const buildTrack = (id: CourseId) => builders[id]()

@@ -80,6 +80,7 @@ legend { padding: 0; font: 700 23px/1 var(--display); letter-spacing: -.02em; }
 [data-course=timber] .track-stripes { background: linear-gradient(90deg,#754128 0 33%,#dcaf69 33% 66%,#477459 66%); }
 [data-course=wireworks] .track-stripes { background: linear-gradient(90deg,#cf773c 0 33%,#94afa8 33% 66%,#385464 66%); }
 [data-course=frostline] .track-stripes { background: linear-gradient(90deg,#47a4c3 0 33%,#c7e6ed 33% 66%,#728eac 66%); }
+[data-course=santa] .track-stripes { background: repeating-linear-gradient(135deg,#aa2037 0 5px,#fff1ce 5px 8px,#14614e 8px 13px,#fff1ce 13px 16px); }
 [data-course=orrery] .track-stripes { background: linear-gradient(90deg,#354969 0 33%,#d8aa55 33% 66%,#858bc1 66%); }
 [data-course=tideglass] .track-stripes { background: linear-gradient(90deg,#38988c 0 33%,#b0e1ce 33% 66%,#af754b 66%); }
 [data-course=kepler] .track-stripes { background: linear-gradient(90deg,#5765aa 0 33%,#eea25d 33% 66%,#55dcd8 66%); }

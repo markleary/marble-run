@@ -3,6 +3,8 @@ import type { CourseTrack, CourseSurface } from './track';
 import { spectralFields, spectralOffset, spectralPolarity } from './courses/spectral';
 import { attachOrreryDrive } from './orreryDrive';
 import { attachAfterglowDrive } from './afterglowDrive';
+import { attachSantaDrive } from './santaDrive';
+import { santaBeltSpeed, santaBeltTraction } from './courses/santaObstacles';
 import { attachSpectralFan } from './spectralFanDrive';
 import { spectralFan } from './courses/spectralFan';
 import { attachCheckpointRacks } from './checkpointRackDrive';
@@ -117,6 +119,7 @@ export class RaceSimulation {
     }
     if (track.id === 'orrery') this.advanceDrive = attachOrreryDrive(this.world, track);
     if (track.id === 'afterglow') this.advanceDrive = attachAfterglowDrive(this.world, track, seed);
+    if (track.id === 'santa') this.advanceDrive = attachSantaDrive(this.world, track, seed);
     this.finishLine = track.sample(track.finishS);
     const stations = checkpointStations(track.id, track.sections);
     if (stations.length) this.competition = createCheckpointRace(track, entrantCount, stations, format);
@@ -187,6 +190,7 @@ export class RaceSimulation {
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
     this.advanceDrive?.((this.tick + 1) * FIXED_DT);
     if (this.track.id === 'spectral') this.driveSpectralTrack();
+    if (this.track.id === 'santa') this.driveWorkshopBelts();
     this.sweepWhereUseful();
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
@@ -217,6 +221,20 @@ export class RaceSimulation {
       const travel = Math.hypot(v.x, v.y, v.z) * FIXED_DT;
       const surfaceTravel = travel + Math.hypot(spin.x, spin.y, spin.z) * radius * FIXED_DT;
       body.enableCcd(surfaceTravel < .85 * radius || travel >= .75 * radius);
+    }
+  }
+
+  private driveWorkshopBelts() {
+    for (const marble of this.marbles) {
+      const traction = santaBeltTraction(marble.distance);
+      if (!traction || !this.rollingSurface(marble, 'support')) continue;
+      // A grounded marble picks up the belt's forward motion. Sideways deflections
+      // from the machinery and airborne motion still come entirely from contact.
+      const { tx, tz } = this.track.sample(marble.distance);
+      const body = this.bodies[marble.id], velocity = body.linvel();
+      const slip = santaBeltSpeed - (velocity.x * tx + velocity.z * tz);
+      const impulse = Math.max(-traction, Math.min(traction, 1.2 * slip)) * FIXED_DT;
+      body.applyImpulse({ x: tx * impulse, y: 0, z: tz * impulse }, true);
     }
   }
 

@@ -38,6 +38,11 @@ export const courses = {
     averageSeconds: 69.4,
     features: ['Gravity dive', 'Vacuum transfer', 'Aurora glass flume'],
   },
+  santa: {
+    title: "Santa's Balls",
+    averageSeconds: 77.2,
+    features: ['Peppermint pinwheels', 'Pop-up parcels', 'Tannenbaum Turn'],
+  },
   spectral: {
     title: 'Spectral Relay',
     averageSeconds: 152.5,

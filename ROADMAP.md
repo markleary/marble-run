@@ -1,6 +1,6 @@
 # Marble Run course roadmap
 
-All ten courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
+All eleven courses support two to six named racers and use fixed, pre-generated layouts. Each race has its own shuffled grid. Each course has a distinct instrumental soundtrack that loops during the heat.
 
 | Course | Status | Setting | Signature section | Target heat |
 | --- | --- | --- | --- | --- |
@@ -11,6 +11,7 @@ All ten courses support two to six named racers and use fixed, pre-generated lay
 | Tideglass Conservatory | Playable | Coastal botanical glasshouse | Standing-wave half-pipe and twin molded sluices | 54–68 seconds |
 | Midnight Orrery | Playable | Tabletop observatory | Pendulum gallery, orbital underpass and two Comet Skips jumps | 51–78 seconds |
 | Kepler Relay | Playable | Orbital communications station | Gravity dive and ballistic transfer from alloy to aurora glass | At least 60 seconds to first place |
+| Santa's Balls | Playable | Snow-covered Christmas village | Peppermint pinwheels and pop-up parcels between two banked hairpins | 60–120 seconds |
 | Afterglow FM | Playable | Midnight radio arena | Sliding crossfader pucks, a narrow bridge and four checkpoint stations | 60–90 seconds in Endurance |
 | Crux Mountain Masters | Playable | Indoor climbing competition | Four jumps, four obstacle boards, a double-apex return and knockout gates | At least two minutes to the first finish |
 | Spectral Relay | Playable | Neon induction arena | Vertical drop shaft, eight-pocket fan, two magnetic galleries and five checkpoint stations | At least two minutes to the first finish |
@@ -100,6 +101,14 @@ Six launch lanes feed Crossfader Alley, where three motorized pucks slide across
 **Cameras and acceptance.** The opening shot looks back at the starting field. Crossfader Alley frames the pack alongside the sliding pucks, then the camera follows the banking through Carrier Spiral. At Mono Bridge, a landscape camera follows from upstream and a portrait camera looks back from downstream to keep the upper deck clear of the leader. Frame the entrance, the level side branch and the qualifying rack at each active station. Across 100 seeds at each field size in Endurance, the first marble must take at least 60 seconds and the final marble must finish within 90 seconds. Run the same grids in Knockout and verify the cuts and joint restarts through to the two finalists. Verify that all six starting slots can win and that rerunning the same grid reproduces its results.
 
 On seeds 1–100, all 500 Endurance and 500 Knockout heats finished. Endurance winners crossed in 65.37–83.98 seconds and the final marble crossed in 67.75–88.96 seconds. Six-marble Knockout winners crossed in 82.05–97.45 seconds. At all 1,000 cuts, the last marble across the entry stripe rolled along the deck into the side pocket. Every grid slot won at every field size in both formats. All 500 Endurance heats on seeds 1009–1108 also met the 60–90 second target. A six-marble pack could start from rest at every downstream section, and each moving puck displaced a marble in a direct contact test.
+
+## Santa's Balls
+
+Two to six polished ornament marbles roll from rest down the steep pitch at the Sleigh Shed gate. The ramp eases into Peppermint Pinwheels. Three candy rotors sweep across the racing line, then sink into brass molds to let the field through. Tannenbaum Turn banks around a lit Christmas tree and its circling toy train. On the return straight, six ribbon-wrapped gifts rise in alternating pairs at Pop-Up Parcel Works. A moving belt under each workshop helps a marble pick up speed after a hit. Both belts carry marbles forward at the same setting in every heat. Each heat’s seed sets the pinwheel and parcel timing. The opposite bank at Ribbon Curl leads onto the scalloped ice of Sleighbell Run, past a row of brass bells, through Starlight Esses and across the timing stripe at North Pole Post. The entire field races from release to finish without checkpoints. In the 57-second Christmas score “Special Delivery,” a music box plays the opening of “Deck the Halls” over celesta, bass clarinet, pizzicato strings and sleigh bells. A second music box reprises the carol at 32 seconds.
+
+**Cameras and acceptance.** Look back toward the shed at launch. Track the pinwheels and parcels from above the shoulder so the marbles and the openings stay visible. Follow the outside of both banked turns and hold the finish stripe for the last racers. Across 100 seeds at every field size, the leader must clear the shed within nine seconds of release, the first finisher must take at least 60 seconds and the last must cross within 120 seconds. At least 90% of heats at each field size must finish within 15 seconds of their winner. Verify that moving candy arms deflect marbles, rising parcels lift them, every section lets a pack restart from rest and replaying a seed reproduces the finish times.
+
+All 6,000 entrants finished across 1,500 heats on seeds 1–100, 1009–1108 and 2001–2100. The leader cleared the shed in 7.30 seconds on average. Individual finish times ranged from 69.12 to 83.29 seconds. Every heat finished within 12.53 seconds of its winner, including 1,491 heats within ten seconds. In six-marble fields the median gap from first to last was 5.74–5.83 seconds across the three seed sets. Every starting slot won at every field size in each set. The first 500 heats averaged 77.2 seconds to the last finisher.
 
 ## Adding courses to the game
 

@@ -3,10 +3,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cruxScore } from './crux-score.mjs';
+import { santaMusicBoxes, santaTineFormat, santaTitle } from './santa-score.mjs';
 
 const directory = new URL('../public/audio/', import.meta.url);
-// Remaster just the Crux recording from the local source cache.
-const cruxOnly = process.argv.includes('--crux');
+// Remaster an individual recording from the local source cache.
+const scoreOnly = process.argv.includes('--crux') ? 'crux' : process.argv.includes('--santa') ? 'santa' : undefined;
 function elevenLabsKey() {
   if (!process.env.ELEVENLABS_API_KEY) throw new Error('Set ELEVENLABS_API_KEY in the local .env file.');
   return process.env.ELEVENLABS_API_KEY;
@@ -21,7 +22,7 @@ const clips = [
   ['bell', 1.7, false, 'Single light tap on a small brass counter bell at a tabletop marble race. A sweet clear high ding with a short natural decay.']
 ];
 await mkdir(directory, { recursive: true });
-for (const [name, duration, loop, prompt] of cruxOnly ? [] : clips) {
+for (const [name, duration, loop, prompt] of scoreOnly ? [] : clips) {
   const file = new URL(name + '.mp3', directory);
   if (await access(file).then(() => true, () => false)) continue;
   const response = await fetch('https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_128', {
@@ -40,6 +41,7 @@ const scores = [
   ['timber', 100, 'Warm cabinetmaker workshop. An acoustic chamber-folk ostinato in 4/4, fingerpicked nylon guitar, pizzicato upright bass, mellow viola and warm woody marimba phrases, with a gently loping pulse as the marbles spiral.'],
   ['wireworks', 116, 'Mechanical kinetic sculpture gallery. Minimalist motorik electronica in A minor with a rubbery muted mono synth bass, soft low-pass electric organ pulses and a repeating interlocked plucked melody. Restrained machine groove, understated percussion, plenty of rhythmic space.'],
   ['frostline', 108, 'Snowy alpine rally village. Airy winter chamber score in 4/4 with felt piano, warm sustained string trio, and a lilting clarinet countermelody over plucked bass. An optimistic flowing pulse. Keep the high register very soft.'],
+  ['santa', 120, 'An original Christmas toyshop instrumental called Special Delivery. A swinging miniature sleigh ride in D major. Celesta plays a jaunty dotted pickup and three rising notes; a woody bass clarinet answers an octave below. Pizzicato strings and double bass bounce between the two beats of each half-bar. A soft shake of harness bells on the backbeat. Develop the tune through a warm string-led middle eight and bring it home on celesta against the answering clarinet. Intimate chamber players on a snowy Christmas Eve, nimble and bright, clear room in the mix for rolling glass marbles.', 32],
   ['orrery', 112, 'Midnight Orrery, a miniature brass clockwork observatory tracing the orbits of planets. A nocturnal chamber ostinato in E minor, gentle celesta notes turning against pulsing bass clarinet, with clipped viola harmonics and a muted French horn answer. Interlock two quiet three-note patterns across a steady four-beat measure to suggest meshing gears. Curious, precise, forward-moving.'],
   ['tideglass', 104, 'Tideglass Conservatory, a seaside glasshouse with winding aquamarine flumes and lush foliage. A breezy instrumental bossa nova in G major. A syncopated nylon-string guitar and round fretless bass carry the rhythm, a breathy alto flute plays a rising then falling phrase, soft brushed rim and shaker tucked underneath. Keep the swaying groove intimate and buoyant.'],
   ['kepler', 110, 'Kepler Relay, an original orbital relay race score titled Signal Return. Cinematic analog space electronica in D Dorian, 4/4. Start in motion with a rounded pulsing synth bass, a warm stereo sequencer answering itself across the beat, and a little muted electronic kick. A solitary, lyrical portamento lead climbs a fourth and hangs in the air over broad, slowly opening string-synth chords. Develop the signal motif over four eight-bar phrases: a spare transmission, a busier descending sequence, an airy suspended phrase, then a low, driving reprise. Keep the pulse and harmonic turnaround continuous under the race. Warm, spacious, quietly propulsive.', 32],
@@ -98,9 +100,9 @@ function masterLoop(id, inputArgs, output, title) {
 }
 
 for (const [id, bpm, brief, loopBars = 8] of scores) {
-  if (cruxOnly && id !== 'crux') continue;
+  if (scoreOnly && id !== scoreOnly) continue;
   const output = new URL('music-' + id + '.mp3', directory);
-  if (!cruxOnly && await access(output).then(() => true, () => false)) continue;
+  if (!scoreOnly && await access(output).then(() => true, () => false)) continue;
   const source = new URL((id === 'crux' ? 'crux-contour-line' : id) + '-source.mp3', cache);
   if (!await access(source).then(() => true, () => false)) {
     const response = await fetch('https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128', {
@@ -138,7 +140,15 @@ for (const [id, bpm, brief, loopBars = 8] of scores) {
     const loop = join(work, 'loop.wav');
     const mastered = join(work, 'loop.mp3');
     execFileSync('ffmpeg', ['-v', 'error', '-i', fileURLToPath(source), '-filter_complex', filter, '-map', '[out]', '-c:a', 'pcm_f32le', loop]);
-    masterLoop(id, ['-i', loop], mastered, id === 'crux' ? cruxScore.title : undefined);
+    if (id === 'santa') {
+      const tines = join(work, 'tines.f32le'), mix = join(work, 'mix.wav');
+      await writeFile(tines, santaMusicBoxes());
+      execFileSync('ffmpeg', ['-v', 'error', '-i', loop, ...santaTineFormat, '-i', tines,
+        '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first:normalize=0', '-c:a', 'pcm_f32le', mix]);
+      masterLoop(id, ['-i', mix], mastered, santaTitle);
+    } else {
+      masterLoop(id, ['-i', loop], mastered, id === 'crux' ? cruxScore.title : undefined);
+    }
     await rename(mastered, output);
     console.log('Generated music-' + id + ' (' + (end - start).toFixed(2) + ' s)');
   } finally { await rm(work, { recursive: true, force: true }); }
