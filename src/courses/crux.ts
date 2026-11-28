@@ -73,7 +73,10 @@ function cruxProfile(): Profile {
           return 2.15 + extension * (ease(board.start - 3, board.start, s) - ease(board.end + 10, board.end + 15, s))
         }
       }
-      return 2.15
+      // Highball Bend carries the most speed, and a marble that crosses to the
+      // outside can climb the full bank. Its taller shield holds that line.
+      const highball = sections[6]
+      return 2.15 + 1.6 * (ease(highball.start - 5, highball.start + 23, s) - ease(highball.end - 23, highball.end + 5, s))
     },
     spans: cruxDeckSpans,
     deflectors: [],

@@ -87,7 +87,6 @@ export class RaceSimulation {
   private tick = 0;
   private racing = false;
   private disposed = false;
-  private fastOpening = false;
 
   constructor(private readonly track: CourseTrack, entrantCount: number, readonly seed: number, format: CheckpointFormat = 'endurance') {
     if (!Number.isInteger(entrantCount) || entrantCount < 2 || entrantCount > track.laneCount) {
@@ -123,10 +122,6 @@ export class RaceSimulation {
     if (stations.length) this.competition = createCheckpointRace(track, entrantCount, stations, format);
     if (track.id === 'spectral') {
       this.advanceDrive = attachSpectralFan(this.world, track, collider => this.surfaceByCollider.set(collider.handle, 'alloy'));
-      this.fastOpening = track.startS < track.sections[1].end;
-      // Resume travel after an impact with the curved receiver within the same
-      // fixed tick. A single CCD substep discards the remaining motion at contact.
-      if (this.fastOpening) this.world.maxCcdSubsteps = 4;
     }
     const random = seededRandom(seed);
     const slots = startingSlots(track.laneCount, random);
@@ -192,13 +187,10 @@ export class RaceSimulation {
     if (!this.racing || this.disposed || this.finished || this.failure) return this.impacts;
     this.advanceDrive?.((this.tick + 1) * FIXED_DT);
     if (this.track.id === 'spectral') this.driveSpectralTrack();
+    this.sweepWhereUseful();
     this.world.step(this.events);
     this.elapsed = ++this.tick * FIXED_DT;
     this.syncBodies();
-    if (this.fastOpening && this.marbles.every(marble => marble.distance >= this.track.sections[1].end)) {
-      this.fastOpening = false;
-      this.world.maxCcdSubsteps = 1;
-    }
     this.competition?.step(this.marbles, this.elapsed, FIXED_DT);
     this.driveRacks?.(this.marbles, this.elapsed, FIXED_DT);
     this.events.drainContactForceEvents(event => {
@@ -211,6 +203,21 @@ export class RaceSimulation {
     });
     this.finished = this.marbles.every(marble => marble.finishTime !== null || marble.cutAt !== undefined);
     return this.impacts;
+  }
+
+  /** Swept CCD holds a body at its predicted impact for the rest of the tick and keeps
+   * its velocity. Once the surface of a rolling sphere travels a radius per tick, Rapier
+   * predicts an impact with the deck under it in every tick of a bend, and the marble
+   * stutters. Skip the sweep in that band. A sphere cannot pass through the course
+   * until its center travels most of a radius, where the sweep resumes. */
+  private sweepWhereUseful() {
+    const { radius } = this.track;
+    for (const marble of this.marbles) {
+      const body = this.bodies[marble.id], v = body.linvel(), spin = body.angvel();
+      const travel = Math.hypot(v.x, v.y, v.z) * FIXED_DT;
+      const surfaceTravel = travel + Math.hypot(spin.x, spin.y, spin.z) * radius * FIXED_DT;
+      body.enableCcd(surfaceTravel < .85 * radius || travel >= .75 * radius);
+    }
   }
 
   private driveSpectralTrack() {
