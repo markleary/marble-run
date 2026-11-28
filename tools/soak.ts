@@ -8,6 +8,7 @@ import { checkKeplerReceiver, measureKeplerTransfer } from './check-kepler';
 import { checkWireworksContacts } from './check-wireworks';
 import { checkPrismBanks } from './check-prism';
 import { checkAfterglow } from './check-afterglow';
+import { checkSantaObstacles } from './check-santa';
 import { checkCheckpointKnockouts } from './check-checkpoints';
 import { checkpointCount } from '../src/courses/checkpoints';
 import { cruxJumps } from '../src/courses/crux';
@@ -21,6 +22,7 @@ import type { MarbleState } from '../src/simulation';
 const repetitions = Number(process.argv[2] ?? 100);
 const firstSeed = Number(process.argv[3] ?? 1);
 const courseFilter = process.argv[4];
+const finishGapFailures: string[] = [];
 assert.ok(Number.isSafeInteger(repetitions) && repetitions > 0, 'Pass a positive number of heats per field size.');
 assert.ok(Number.isSafeInteger(firstSeed), 'Pass an integer starting seed.');
 assert.ok(!courseFilter || courseIds.some(id => id === courseFilter), 'Specify one of ' + courseIds.join(', ') + '.');
@@ -60,11 +62,30 @@ function heldMarbles(marbles: MarbleState[], speedBefore: number[]) {
   return held;
 }
 
+function summarizeFinishGaps(gaps: { seed: number; seconds: number }[]) {
+  if (!gaps.length) return;
+  gaps.sort((a, b) => a.seconds - b.seconds);
+  const middle = (gaps.length - 1) / 2;
+  const median = (gaps[Math.floor(middle)].seconds + gaps[Math.ceil(middle)].seconds) / 2;
+  // Percentiles use nearest rank. Apply the cutoff to the original crossing times.
+  const percentile = (p: number) => +gaps[Math.ceil(p * gaps.length) - 1].seconds.toFixed(2);
+  const fractionWithin = (seconds: number) => gaps.filter(gap => gap.seconds <= seconds).length / gaps.length;
+  const worst = gaps[gaps.length - 1];
+  return {
+    median: +median.toFixed(2), p90: percentile(.90), p95: percentile(.95),
+    max: +worst.seconds.toFixed(2), worstSeed: worst.seed,
+    fractionWithin10s: fractionWithin(10), fractionWithin15s: fractionWithin(15),
+  };
+}
+
 function exerciseField(track: CourseTrack, count: number) {
   const wins = Array<number>(track.laneCount).fill(0);
   const starts = Array<number>(track.laneCount).fill(0);
   const durations: number[] = [];
   const transferSeconds: number[] = [], winnerSeconds: number[] = [];
+  const finishGaps: { seed: number; seconds: number }[] = [];
+  const shedExit = track.id === 'santa' ? track.sections[0].end : undefined;
+  const shedExitSeconds: number[] = [];
   const sluice = track.sections.find(section => section.name === 'Twin Frond Sluice');
   const branchMidpoint = track.id === 'wireworks' ? (wireworksLayout.forkStart + wireworksLayout.forkEnd) / 2
     : sluice ? (sluice.start + sluice.end) / 2 : undefined;
@@ -92,9 +113,13 @@ function exerciseField(track: CourseTrack, count: number) {
       const transfer = track.id === 'kepler' ? measureKeplerTransfer(race) : undefined;
       const fan = track.id === 'spectral' ? watchSpectralFan(track, race) : undefined;
       const speedBefore = Array<number>(count).fill(0);
+      let firstShedExit: number | undefined;
       let held = 0;
       while (!race.finished && !race.failure) {
         race.step();
+        if (shedExit !== undefined && firstShedExit === undefined && race.marbles.some(m => m.distance >= shedExit)) {
+          firstShedExit = race.elapsed;
+        }
         held += heldMarbles(race.marbles, speedBefore);
         transfer?.observe();
         fan?.observe();
@@ -136,6 +161,17 @@ function exerciseField(track: CourseTrack, count: number) {
           assert.ok(winnerTime >= 60, 'Kepler Relay must take at least 60 seconds from release to the first finisher.');
           winnerSeconds.push(winnerTime);
           transferSeconds.push(...transfer.seconds(seed));
+        }
+        if (track.id === 'santa') {
+          assert.equal(checkpointCount(track.id), 0);
+          assert.ok(firstShedExit !== undefined && firstShedExit <= 9,
+            `Santa's Balls, seed ${seed}, field ${count}: the leader must exit the Sleigh Shed within 9 seconds of release (got ${firstShedExit}s).`);
+          shedExitSeconds.push(firstShedExit);
+          const first = finishers[0].finishTime!, last = finishers[count - 1].finishTime!;
+          assert.ok(first >= 60 && last <= 120,
+            `Santa's Balls, seed ${seed}, field ${count}: finish times ${first}–${last} fell outside 60–120 seconds.`);
+          winnerSeconds.push(first);
+          finishGaps.push({ seed, seconds: last - first });
         }
         if (checkpointCount(track.id)) {
           const gates = race.competition!.gates;
@@ -182,10 +218,21 @@ function exerciseField(track: CourseTrack, count: number) {
       race.dispose();
     }
   }
+  const finishGapSeconds = summarizeFinishGaps(finishGaps);
+  if (finishGapSeconds && repetitions >= 100 && finishGapSeconds.fractionWithin15s < .90) {
+    const percent = (100 * finishGapSeconds.fractionWithin15s).toFixed(1);
+    finishGapFailures.push(`Santa's Balls, field ${count}: ${percent}% of heats finished within 15 seconds of their winner (minimum 90%). `
+      + `Largest gap was ${finishGapSeconds.max}s at seed ${finishGapSeconds.worstSeed}.`);
+  }
   console.log(JSON.stringify({
     course: track.id, count, heats: repetitions, finishes: durations.length, startingSlots: starts, winningSlots: wins,
     seconds: durations.length ? [Math.min(...durations), Math.max(...durations)].map(s => +s.toFixed(2)) : [],
     meanSeconds: durations.length ? +(durations.reduce((sum, seconds) => sum + seconds, 0) / durations.length).toFixed(2) : null,
+    ...(finishGapSeconds && { finishGapSeconds }),
+    ...(shedExitSeconds.length && { firstShedExitSeconds: {
+      mean: +(shedExitSeconds.reduce((sum, seconds) => sum + seconds, 0) / shedExitSeconds.length).toFixed(2),
+      max: +Math.max(...shedExitSeconds).toFixed(2),
+    } }),
     ...(winnerSeconds.length && {
       [track.id === 'crux' ? 'winningSeconds' : 'winnerSeconds']: [Math.min(...winnerSeconds), Math.max(...winnerSeconds)].map(s => +s.toFixed(2)),
     }),
@@ -258,10 +305,11 @@ for (const id of courseIds) {
   for (let count = 2; count <= track.laneCount; count++) failures += exerciseField(track, count);
   if (id === 'prism') checkPrismBanks(track);
   if (id === 'afterglow') checkAfterglow(track);
+  if (id === 'santa') checkSantaObstacles(track);
   if (id === 'kepler') checkKeplerReceiver(track);
   if (checkpointCount(id)) checkCheckpointKnockouts(track, firstSeed, repetitions);
   if (id === 'crux') checkCourseJumps(track, firstSeed, cruxJumps);
-  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral', 'afterglow'].includes(id)) checkSectionStarts(track);
+  if (['frostline', 'timber', 'orrery', 'tideglass', 'kepler', 'crux', 'spectral', 'afterglow', 'santa'].includes(id)) checkSectionStarts(track);
   if (id === 'spectral') checkSpectralMechanics(track, firstSeed);
   if (id === 'timber') checkTimberLevels(track);
   if (id === 'wireworks') checkWireworksContacts(track);
@@ -271,3 +319,4 @@ for (const id of courseIds) {
   }
 }
 assert.equal(failures, 0, failures + ' heats failed; see the courses and seeds above.');
+assert.ok(!finishGapFailures.length, finishGapFailures.join('\n'));

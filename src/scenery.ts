@@ -13,6 +13,7 @@ import { createTideglassScenery } from './tideglassScenery'
 import { createKeplerScenery } from './keplerScenery'
 import { createSpectralScenery } from './spectralScenery'
 import { createAfterglowScenery } from './afterglowScenery'
+import { createSantaScenery } from './santaScenery'
 import { hasCheckpoints } from './courses/checkpoints'
 import { createCheckpointStations } from './checkpointStations'
 
@@ -22,7 +23,7 @@ const scenery = {
   prism: createPrismScenery, frostline: createFrostlineScenery, timber: createTimberScenery,
   wireworks: createWireworksScenery, orrery: createOrreryScenery, tideglass: createTideglassScenery,
   kepler: createKeplerScenery, crux: createCruxScenery, spectral: createSpectralScenery,
-  afterglow: createAfterglowScenery,
+  afterglow: createAfterglowScenery, santa: createSantaScenery,
 }
 
 export type CourseScenery = THREE.Group & {

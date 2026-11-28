@@ -8,7 +8,7 @@ Use the fullscreen button in the top-right corner to expand the game or return t
 
 On a phone, rotate between portrait and landscape at any point. Tap the chevron beside the race clock to expand the full running order. Switching apps pauses the race and audio until you return.
 
-To play from your home screen, choose **Install game** in race setup. On iPhone or iPad, use Safari’s **Share → Add to Home Screen** and enable **Open as Web App** if shown. On Android, follow Chrome’s install prompt or choose the install option in its menu. After the first online launch finishes downloading the game, all ten tracks and their soundtracks work offline.
+To play from your home screen, choose **Install game** in race setup. On iPhone or iPad, use Safari’s **Share → Add to Home Screen** and enable **Open as Web App** if shown. On Android, follow Chrome’s install prompt or choose the install option in its menu. After the first online launch finishes downloading the game, all eleven tracks and their soundtracks work offline.
 
 | Track | Race highlights | Soundtrack |
 | --- | --- | --- |
@@ -19,6 +19,7 @@ To play from your home screen, choose **Install game** in race setup. On iPhone 
 | Tideglass Conservatory | A botanical glasshouse with a winding half-pipe and twin sea-glass sluices | Alto flute and nylon-string guitar in a bossa nova |
 | Midnight Orrery | Three swinging pendulums, an orbital underpass and two ramp jumps across open gaps | Celesta, bass clarinet and viola in a clockwork ostinato |
 | Kepler Relay | A solar-array station, a steep gravity dive and an open-space jump into a banked glass half-pipe | “Signal Return,” an analog sequencer, string-synth pads and a gliding lead |
+| Santa's Balls | A steep sleigh ramp feeds workshop conveyors with sweeping peppermint pinwheels and pop-up parcels. An icy sleigh run leads to North Pole Post | “Special Delivery” opens with “Deck the Halls” on music box, backed by celesta, bass clarinet, pizzicato strings and sleigh bells |
 | Afterglow FM | A continuous neon ribbon with sliding crossfader pucks, a 270° bank and a narrow bridge beneath the upper deck | “Dial Tone at Midnight,” a late-night electro instrumental with a two-note FM synth hook |
 | Crux Mountain Masters | A two-minute-plus climbing gym race with four gap jumps, bumper and blade slaloms, a double-apex turnaround and knockout gates | “Contour Line,” melodic electronic house with a rolling bass line and a rising synth hook |
 | Spectral Relay | A vertical drop onto a banked approach, an eight-blade fan that catches marbles and spins them to the far exit, two magnetic galleries and five timed checkpoints | “Chromatic Slipstream,” an ElevenLabs electro-breaks instrumental with a descending glass-synth hook |
@@ -43,3 +44,5 @@ npm run dev
 Built with Three.js, Rapier, TypeScript and Vite. The game bundles its ElevenLabs instrumental scores and sound effects. Sound begins with player interaction.
 
 `npm run audio:generate -- --crux` remasters the cached recording of “Contour Line”. With an empty source cache, it uses the ElevenLabs key in `.env` to generate a new rendition.
+
+`npm run audio:generate -- --santa` mixes the “Deck the Halls” music-box parts into “Special Delivery”. It reuses the cached ensemble recording when available.

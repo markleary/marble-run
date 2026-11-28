@@ -1,0 +1,101 @@
+{
+  "seed": 1498371404,
+  "origin": {
+    "x": -28,
+    "z": -28,
+    "angle": 0
+  },
+  "halfWidth": 4.2,
+  "laneCount": 6,
+  "startS": 1.1,
+  "finishS": 280.9406004535687,
+  "runs": [
+    {
+      "length": 17,
+      "curvature": 0
+    },
+    {
+      "length": 35,
+      "curvature": 0
+    },
+    {
+      "length": 47.1238898038469,
+      "curvature": 0.06666666666666667
+    },
+    {
+      "length": 50,
+      "curvature": 0
+    },
+    {
+      "length": 40.840704496667314,
+      "curvature": -0.07692307692307693
+    },
+    {
+      "length": 32,
+      "curvature": 0
+    },
+    {
+      "length": 10.088003076527224,
+      "curvature": -0.058823529411764705
+    },
+    {
+      "length": 10.088003076527224,
+      "curvature": 0.058823529411764705
+    },
+    {
+      "length": 44,
+      "curvature": 0
+    }
+  ],
+  "sections": [
+    {
+      "name": "Sleigh Shed",
+      "start": 0,
+      "end": 17
+    },
+    {
+      "name": "Peppermint Pinwheels",
+      "start": 17,
+      "end": 52
+    },
+    {
+      "name": "Tannenbaum Turn",
+      "start": 52,
+      "end": 99.12388980384691
+    },
+    {
+      "name": "Pop-Up Parcel Works",
+      "start": 99.12388980384691,
+      "end": 149.1238898038469
+    },
+    {
+      "name": "Ribbon Curl",
+      "start": 149.1238898038469,
+      "end": 189.96459430051422
+    },
+    {
+      "name": "Sleighbell Run",
+      "start": 189.96459430051422,
+      "end": 221.96459430051422
+    },
+    {
+      "name": "Starlight Esses",
+      "start": 221.96459430051422,
+      "end": 242.14060045356868
+    },
+    {
+      "name": "North Pole Post",
+      "start": 242.14060045356868,
+      "end": 286.1406004535687
+    }
+  ],
+  "bellPitch": 7.084170919191092,
+  "launchTrims": [
+    0.34,
+    0.22,
+    0.12,
+    0.04,
+    -0.04,
+    -0.12
+  ]
+}

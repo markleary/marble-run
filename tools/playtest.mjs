@@ -35,14 +35,14 @@ const page = await browser.newPage(mobile ? {
 } : { viewport: { width: 1440, height: 900 } });
 const issues = [];
 const loadedMusic = new Set();
-let cruxMusicBytes;
+const featuredMusicBytes = new Map();
 page.on('pageerror', error => issues.push(error.message));
 page.on('response', response => {
   if (response.status() >= 400) issues.push(response.status() + ' ' + response.url());
   const music = new URL(response.url()).pathname.match(/\/audio\/music-([a-z]+)\.mp3$/);
   if (music && response.ok()) {
     loadedMusic.add(music[1]);
-    if (music[1] === 'crux') cruxMusicBytes = response.body().catch(() => null);
+    if (music[1] === 'crux' || music[1] === 'santa') featuredMusicBytes.set(music[1], response.body().catch(() => null));
   }
 });
 const fieldSize = mobile ? 2 : 6;
@@ -126,8 +126,23 @@ async function landmarkTimes(id, seed, sections, format = 'endurance') {
     }
     marks.sort((a, b) => a[1] - b[1]);
     heat.release();
+    const featureShots = {};
+    if (id === 'santa') {
+      const { santaMachines, santaCue, pinwheel, pinwheelLift } = await tsImport('../src/courses/santaObstacles.ts', import.meta.url);
+      const { wheels } = santaMachines(track), cue = santaCue(seed);
+      // The center of the straight can coincide with all three heads retracted.
+      // Frame the first exposed candy arm that the leading pack reaches.
+      featureShots['Peppermint Pinwheels'] = () => {
+        const leader = Math.max(...heat.marbles.map(marble => marble.distance));
+        return wheels.some(wheel => pinwheelLift(wheel, heat.elapsed + cue) > -.08
+          && heat.marbles.some(marble => leader - marble.distance < 4
+            && Math.hypot(marble.position.x - wheel.at.x, marble.position.z - wheel.at.z)
+              < pinwheel.reach + pinwheel.tipRadius + track.radius));
+      };
+    }
     for (const [name, distance] of marks) {
-      while (!heat.failure && !heat.finished && heat.marbles.every(marble => marble.distance < distance)) {
+      const visible = featureShots[name] ?? (() => heat.marbles.some(marble => marble.distance >= distance));
+      while (!heat.failure && !heat.finished && !visible()) {
         heat.step();
       }
       assert.ok(!heat.failure && !heat.finished, name + ' rehearsal failed: ' + heat.failure);
@@ -180,11 +195,12 @@ async function verifyResults(track, count, marked, format = 'endurance') {
   if (track === 'Kepler Relay') {
     assert.ok(await page.locator('.winner-card p').innerText() >= '1:00.00', 'Kepler Relay winner must race for at least a minute.');
   }
-  if (track === 'Afterglow FM' && format === 'endurance') {
+  if ((track === 'Afterglow FM' && format === 'endurance') || track === "Santa's Balls") {
+    const max = track === 'Afterglow FM' ? 90 : 120;
     const times = await page.locator('.finish-time').evaluateAll(cells => cells.map(cell => cell.firstChild.textContent));
     assert.equal(times.length, count);
-    assert.ok(times.map(clockSeconds).every(seconds => seconds >= 60 && seconds <= 90),
-      'Every Afterglow FM racer must cross the finish in 60–90 seconds.');
+    assert.ok(times.map(clockSeconds).every(seconds => seconds >= 60 && seconds <= max),
+      `Every ${track} racer must cross the finish in 60–${max} seconds.`);
   }
   await assertRacers('.finish-order', entrants.slice(0, count));
   await assertMarked('.finish-order', marked);
@@ -471,18 +487,20 @@ try {
   await verifyResults('Frostline Rally', frostField, frostField - 1);
   assert.equal(await tally(), 3);
   await page.getByRole('button', { name: 'Change setup' }).click();
-  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23, spectral: 23, afterglow: 23 };
+  const seeds = { orrery: 82, tideglass: 58, kepler: 23, crux: 23, spectral: 23, afterglow: 23, santa: 25 };
   const orrery = await landmarkTimes('orrery', seeds.orrery, ['Escapement Gallery', 'Ecliptic Underpass']);
   const tideglass = await landmarkTimes('tideglass', seeds.tideglass, ['Standing Wave Gallery', 'Twin Frond Sluice']);
   const kepler = await landmarkTimes('kepler', seeds.kepler, ['Solar Array Esses', 'Gravity Dive', 'Aurora Catch', 'Orbital Return']);
   const crux = await landmarkTimes('crux', seeds.crux, ['Chalk Velodrome'], 'knockout');
   const spectral = await landmarkTimes('spectral', seeds.spectral, ['Halo Carousel', 'Induction Gallery', 'Polarity Inverter']);
   const afterglow = await landmarkTimes('afterglow', seeds.afterglow, ['Crossfader Alley', 'Carrier Spiral', 'Mono Bridge', 'Sideband Turn']);
+  const santa = await landmarkTimes('santa', seeds.santa, ['Peppermint Pinwheels', 'Tannenbaum Turn', 'Pop-Up Parcel Works', 'North Pole Post']);
   const jumpShots = {};
   for (const [id, time] of [['orrery', orrery.Airborne], ['kepler', kepler.Airborne], ['crux', crux.Airborne]]) {
     jumpShots[id] = clock(time - .04);
   }
   for (const [title, id, shots] of [
+    ["Santa's Balls", 'santa', Object.entries(santa).map(([name, time]) => [clock(time), name.toLowerCase().replaceAll(' ', '-')])],
     ['Timber Corkscrew', 'timber', [['0:13.00', 'racing']]],
     ['Wireworks Drop', 'wireworks', [['0:07.00', 'rails'], ['0:25.00', 'racing']]],
     ['Midnight Orrery', 'orrery', [
@@ -565,7 +583,8 @@ try {
       await page.evaluate(() => { delete window.playtestActionShot; });
     }
     for (const [time, shot] of shots) {
-      const freeze = id === 'spectral' || time === jumpShots[id] || ['side-pocket', 'qualification-rack', 'gate-release'].includes(shot);
+      const freeze = id === 'spectral' || time === jumpShots[id]
+        || ['peppermint-pinwheels', 'side-pocket', 'qualification-rack', 'gate-release'].includes(shot);
       if (freeze) {
         const approach = clock(Math.max(0, clockSeconds(time) - 1));
         await page.evaluate(spec => { window.playtestActionShot = spec; }, { approach, target: time });
@@ -606,8 +625,10 @@ try {
     if (id === 'crux') {
       const scoreSeconds = cruxScore.bars * 4 * 60 / cruxScore.bpm;
       assert.ok(Math.abs(musicSeconds - scoreSeconds) < .25, 'Crux must play the full house arrangement.');
-      const master = await readFile(new URL('../public/audio/music-crux.mp3', import.meta.url));
-      assert.ok(master.equals((await cruxMusicBytes) ?? Buffer.alloc(0)), 'Crux must load the released recording of ' + cruxScore.title);
+    }
+    if (id === 'crux' || id === 'santa') {
+      const master = await readFile(new URL('../public/audio/music-' + id + '.mp3', import.meta.url));
+      assert.ok(master.equals((await featuredMusicBytes.get(id)) ?? Buffer.alloc(0)), title + ' must play its released recording.');
     }
     await verifyResults(title, 6, 5, format);
     await capture(id + '-results');
@@ -634,8 +655,8 @@ try {
       await page.getByRole('button', { name: 'Change setup' }).click();
     }
   }
-  assert.equal(await tally(), 22);
-  assert.deepEqual([...loadedMusic].sort(), ['afterglow', 'crux', 'frostline', 'kepler', 'orrery', 'prism', 'spectral', 'tideglass', 'timber', 'wireworks']);
+  assert.equal(await tally(), 24);
+  assert.deepEqual([...loadedMusic].sort(), Object.keys(courses).sort());
   await page.reload();
   await fieldButton(6).click();
   await assertSetup(6);
@@ -650,7 +671,7 @@ try {
   await capture('standings');
   await page.getByRole('button', { name: 'Close standings' }).click();
   assert.deepEqual(issues, []);
-  console.log('Passed ten courses, ten soundtracks, named entrants, restart, twenty-two timed heats and cumulative podium scoring:', game);
+  console.log('Passed eleven courses, eleven soundtracks, named entrants, restart, twenty-four timed heats and cumulative podium scoring:', game);
 } finally {
   await browser.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));
